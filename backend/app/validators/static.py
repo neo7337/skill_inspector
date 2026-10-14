@@ -1,0 +1,475 @@
+"""
+Static validation engine for agentskills.io SKILL.md format.
+
+Implements all rules from the official specification:
+https://agentskills.io/specification
+"""
+from __future__ import annotations
+
+import re
+from enum import Enum
+from typing import Any
+
+from pydantic import BaseModel
+
+from app.parser import SkillDocument
+
+
+# ── Constants from spec ──────────────────────────────────────────────────────
+
+NAME_MAX_LEN = 64
+DESCRIPTION_MAX_LEN = 1024
+COMPATIBILITY_MAX_LEN = 500
+BODY_LINE_WARN_THRESHOLD = 500
+BODY_TOKEN_WARN_THRESHOLD = 5000
+
+# name: lowercase alphanumeric + hyphens, no leading/trailing/consecutive hyphens
+_NAME_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
+_CONSECUTIVE_HYPHENS = re.compile(r"--")
+
+
+# ── Report models ─────────────────────────────────────────────────────────────
+
+class RuleStatus(str, Enum):
+    PASS = "pass"
+    WARN = "warn"
+    FAIL = "fail"
+
+
+class Finding(BaseModel):
+    dimension: str
+    rule: str
+    status: RuleStatus
+    message: str
+    suggestion: str
+
+
+class StaticValidationReport(BaseModel):
+    findings: list[Finding]
+    overall_status: RuleStatus
+    score: int  # 0–100
+
+    @property
+    def passes(self) -> list[Finding]:
+        return [f for f in self.findings if f.status == RuleStatus.PASS]
+
+    @property
+    def warnings(self) -> list[Finding]:
+        return [f for f in self.findings if f.status == RuleStatus.WARN]
+
+    @property
+    def failures(self) -> list[Finding]:
+        return [f for f in self.findings if f.status == RuleStatus.FAIL]
+
+
+# ── Individual rule checkers ──────────────────────────────────────────────────
+
+def _check_name(name: Any) -> list[Finding]:
+    findings: list[Finding] = []
+
+    # Required
+    if name is None:
+        findings.append(Finding(
+            dimension="Schema",
+            rule="name.required",
+            status=RuleStatus.FAIL,
+            message="Required field 'name' is missing.",
+            suggestion="Add a 'name' field to your frontmatter: name: my-skill-name",
+        ))
+        return findings  # All subsequent name checks are moot
+
+    if not isinstance(name, str):
+        findings.append(Finding(
+            dimension="Schema",
+            rule="name.type",
+            status=RuleStatus.FAIL,
+            message=f"'name' must be a string, got {type(name).__name__}.",
+            suggestion="Set name to a plain string value, e.g. name: my-skill",
+        ))
+        return findings
+
+    # Empty
+    if not name.strip():
+        findings.append(Finding(
+            dimension="Schema",
+            rule="name.non-empty",
+            status=RuleStatus.FAIL,
+            message="'name' must not be empty.",
+            suggestion="Provide a non-empty name, e.g. name: my-skill",
+        ))
+        return findings
+
+    # Max length
+    if len(name) > NAME_MAX_LEN:
+        findings.append(Finding(
+            dimension="Schema",
+            rule="name.max-length",
+            status=RuleStatus.FAIL,
+            message=f"'name' is {len(name)} characters; maximum is {NAME_MAX_LEN}.",
+            suggestion=f"Shorten the name to {NAME_MAX_LEN} characters or fewer.",
+        ))
+    else:
+        findings.append(Finding(
+            dimension="Schema",
+            rule="name.max-length",
+            status=RuleStatus.PASS,
+            message=f"'name' length is {len(name)} characters (max {NAME_MAX_LEN}).",
+            suggestion="",
+        ))
+
+    # Character set: lowercase alphanumeric + hyphens only
+    if not re.match(r"^[a-z0-9-]+$", name):
+        findings.append(Finding(
+            dimension="Schema",
+            rule="name.charset",
+            status=RuleStatus.FAIL,
+            message=f"'name' contains invalid characters: '{name}'. Only lowercase letters (a-z), digits (0-9), and hyphens (-) are allowed.",
+            suggestion="Use only lowercase alphanumeric characters and hyphens, e.g. my-skill-2",
+        ))
+    else:
+        # Starts/ends with hyphen
+        if name.startswith("-") or name.endswith("-"):
+            findings.append(Finding(
+                dimension="Schema",
+                rule="name.hyphen-boundaries",
+                status=RuleStatus.FAIL,
+                message=f"'name' must not start or end with a hyphen. Got: '{name}'.",
+                suggestion="Remove the leading or trailing hyphen from the name.",
+            ))
+        else:
+            findings.append(Finding(
+                dimension="Schema",
+                rule="name.charset",
+                status=RuleStatus.PASS,
+                message="'name' uses only allowed characters (lowercase alphanumeric and hyphens).",
+                suggestion="",
+            ))
+
+        # Consecutive hyphens
+        if _CONSECUTIVE_HYPHENS.search(name):
+            findings.append(Finding(
+                dimension="Schema",
+                rule="name.consecutive-hyphens",
+                status=RuleStatus.FAIL,
+                message=f"'name' contains consecutive hyphens: '{name}'.",
+                suggestion="Replace consecutive hyphens (--) with a single hyphen (-).",
+            ))
+        else:
+            findings.append(Finding(
+                dimension="Schema",
+                rule="name.consecutive-hyphens",
+                status=RuleStatus.PASS,
+                message="'name' contains no consecutive hyphens.",
+                suggestion="",
+            ))
+
+    # Full pattern check (consolidates boundary + charset for clean one-pass)
+    if re.match(r"^[a-z0-9-]+$", name) and not name.startswith("-") and not name.endswith("-"):
+        if not _CONSECUTIVE_HYPHENS.search(name):
+            findings.append(Finding(
+                dimension="Schema",
+                rule="name.valid",
+                status=RuleStatus.PASS,
+                message=f"'name' value '{name}' is valid.",
+                suggestion="",
+            ))
+
+    return findings
+
+
+def _check_description(description: Any) -> list[Finding]:
+    findings: list[Finding] = []
+
+    if description is None:
+        findings.append(Finding(
+            dimension="Schema",
+            rule="description.required",
+            status=RuleStatus.FAIL,
+            message="Required field 'description' is missing.",
+            suggestion="Add a 'description' field explaining what this skill does and when to use it.",
+        ))
+        return findings
+
+    if not isinstance(description, str):
+        findings.append(Finding(
+            dimension="Schema",
+            rule="description.type",
+            status=RuleStatus.FAIL,
+            message=f"'description' must be a string, got {type(description).__name__}.",
+            suggestion="Set description to a plain string value.",
+        ))
+        return findings
+
+    if not description.strip():
+        findings.append(Finding(
+            dimension="Schema",
+            rule="description.non-empty",
+            status=RuleStatus.FAIL,
+            message="'description' must not be empty.",
+            suggestion="Provide a meaningful description that says what the skill does and when to use it.",
+        ))
+        return findings
+
+    findings.append(Finding(
+        dimension="Schema",
+        rule="description.non-empty",
+        status=RuleStatus.PASS,
+        message="'description' is non-empty.",
+        suggestion="",
+    ))
+
+    if len(description) > DESCRIPTION_MAX_LEN:
+        findings.append(Finding(
+            dimension="Schema",
+            rule="description.max-length",
+            status=RuleStatus.FAIL,
+            message=f"'description' is {len(description)} characters; maximum is {DESCRIPTION_MAX_LEN}.",
+            suggestion=f"Shorten the description to {DESCRIPTION_MAX_LEN} characters or fewer.",
+        ))
+    else:
+        findings.append(Finding(
+            dimension="Schema",
+            rule="description.max-length",
+            status=RuleStatus.PASS,
+            message=f"'description' length is {len(description)} characters (max {DESCRIPTION_MAX_LEN}).",
+            suggestion="",
+        ))
+
+    # Quality hint: description should mention "when to use"
+    lower = description.lower()
+    use_keywords = ["use when", "when to use", "when the user", "for when", "whenever", "use for"]
+    if not any(kw in lower for kw in use_keywords):
+        findings.append(Finding(
+            dimension="Instruction Quality",
+            rule="description.when-to-use",
+            status=RuleStatus.WARN,
+            message="'description' doesn't appear to mention when to use this skill.",
+            suggestion="Add trigger context, e.g. 'Use when the user asks about X' or 'Use when working with Y files'.",
+        ))
+    else:
+        findings.append(Finding(
+            dimension="Instruction Quality",
+            rule="description.when-to-use",
+            status=RuleStatus.PASS,
+            message="'description' includes usage context (when to use).",
+            suggestion="",
+        ))
+
+    return findings
+
+
+def _check_compatibility(compatibility: Any) -> list[Finding]:
+    if compatibility is None:
+        return []  # Optional field
+
+    if not isinstance(compatibility, str):
+        return [Finding(
+            dimension="Schema",
+            rule="compatibility.type",
+            status=RuleStatus.FAIL,
+            message=f"'compatibility' must be a string, got {type(compatibility).__name__}.",
+            suggestion="Set compatibility to a plain string, e.g. compatibility: Requires Python 3.11+",
+        )]
+
+    if len(compatibility) > COMPATIBILITY_MAX_LEN:
+        return [Finding(
+            dimension="Schema",
+            rule="compatibility.max-length",
+            status=RuleStatus.FAIL,
+            message=f"'compatibility' is {len(compatibility)} characters; maximum is {COMPATIBILITY_MAX_LEN}.",
+            suggestion=f"Shorten the compatibility field to {COMPATIBILITY_MAX_LEN} characters or fewer.",
+        )]
+
+    return [Finding(
+        dimension="Schema",
+        rule="compatibility.valid",
+        status=RuleStatus.PASS,
+        message=f"'compatibility' is valid ({len(compatibility)} characters).",
+        suggestion="",
+    )]
+
+
+def _check_metadata(metadata: Any) -> list[Finding]:
+    if metadata is None:
+        return []  # Optional
+
+    if not isinstance(metadata, dict):
+        return [Finding(
+            dimension="Schema",
+            rule="metadata.type",
+            status=RuleStatus.FAIL,
+            message=f"'metadata' must be a YAML mapping (dict), got {type(metadata).__name__}.",
+            suggestion="Format metadata as key-value pairs:\nmetadata:\n  author: my-org\n  version: '1.0'",
+        )]
+
+    non_string_keys = [k for k in metadata if not isinstance(k, str)]
+    non_string_values = [k for k, v in metadata.items() if not isinstance(v, str)]
+
+    findings: list[Finding] = []
+
+    if non_string_keys:
+        findings.append(Finding(
+            dimension="Schema",
+            rule="metadata.string-keys",
+            status=RuleStatus.FAIL,
+            message=f"'metadata' keys must be strings. Non-string keys: {non_string_keys}",
+            suggestion="Use only string keys in the metadata mapping.",
+        ))
+
+    if non_string_values:
+        findings.append(Finding(
+            dimension="Schema",
+            rule="metadata.string-values",
+            status=RuleStatus.WARN,
+            message=f"'metadata' values should be strings. Non-string values for keys: {non_string_values}",
+            suggestion="Wrap non-string values in quotes, e.g. version: '1.0'",
+        ))
+
+    if not findings:
+        findings.append(Finding(
+            dimension="Schema",
+            rule="metadata.valid",
+            status=RuleStatus.PASS,
+            message=f"'metadata' is a valid string→string mapping with {len(metadata)} entries.",
+            suggestion="",
+        ))
+
+    return findings
+
+
+def _check_allowed_tools(allowed_tools: Any) -> list[Finding]:
+    if allowed_tools is None:
+        return []  # Optional, experimental
+
+    if not isinstance(allowed_tools, str):
+        return [Finding(
+            dimension="Schema",
+            rule="allowed-tools.type",
+            status=RuleStatus.FAIL,
+            message=f"'allowed-tools' must be a space-separated string, got {type(allowed_tools).__name__}.",
+            suggestion="Format as a space-separated string: allowed-tools: Bash(git:*) Read Write",
+        )]
+
+    return [Finding(
+        dimension="Schema",
+        rule="allowed-tools.valid",
+        status=RuleStatus.PASS,
+        message=f"'allowed-tools' is a valid string.",
+        suggestion="",
+    )]
+
+
+def _check_body(doc: SkillDocument) -> list[Finding]:
+    findings: list[Finding] = []
+
+    if not doc.body.strip():
+        findings.append(Finding(
+            dimension="Body",
+            rule="body.non-empty",
+            status=RuleStatus.FAIL,
+            message="The skill body (instructions after frontmatter) is empty.",
+            suggestion="Add step-by-step instructions, examples, and edge cases after the --- delimiter.",
+        ))
+        return findings
+
+    findings.append(Finding(
+        dimension="Body",
+        rule="body.non-empty",
+        status=RuleStatus.PASS,
+        message=f"Body has content ({doc.body_line_count} lines).",
+        suggestion="",
+    ))
+
+    # Line count warning
+    if doc.body_line_count > BODY_LINE_WARN_THRESHOLD:
+        findings.append(Finding(
+            dimension="Body",
+            rule="body.line-count",
+            status=RuleStatus.WARN,
+            message=f"Body is {doc.body_line_count} lines; the spec recommends keeping SKILL.md under 500 lines.",
+            suggestion="Move detailed reference material to references/ directory files and link to them from the body.",
+        ))
+    else:
+        findings.append(Finding(
+            dimension="Body",
+            rule="body.line-count",
+            status=RuleStatus.PASS,
+            message=f"Body is {doc.body_line_count} lines (recommended max 500).",
+            suggestion="",
+        ))
+
+    # Token count warning
+    if doc.estimated_token_count > BODY_TOKEN_WARN_THRESHOLD:
+        findings.append(Finding(
+            dimension="Body",
+            rule="body.token-count",
+            status=RuleStatus.WARN,
+            message=f"Body is estimated at ~{doc.estimated_token_count} tokens; the spec recommends under 5,000.",
+            suggestion="Trim or split long sections into referenced files to reduce context footprint.",
+        ))
+    else:
+        findings.append(Finding(
+            dimension="Body",
+            rule="body.token-count",
+            status=RuleStatus.PASS,
+            message=f"Body is estimated at ~{doc.estimated_token_count} tokens (recommended max 5,000).",
+            suggestion="",
+        ))
+
+    return findings
+
+
+def _check_unknown_fields(frontmatter: dict[str, Any]) -> list[Finding]:
+    known = {"name", "description", "license", "compatibility", "metadata", "allowed-tools"}
+    unknown = set(frontmatter.keys()) - known
+    if unknown:
+        return [Finding(
+            dimension="Schema",
+            rule="frontmatter.unknown-fields",
+            status=RuleStatus.WARN,
+            message=f"Unknown frontmatter fields: {sorted(unknown)}. These are not part of the spec.",
+            suggestion="Use the 'metadata' field to store custom key-value pairs instead of top-level custom fields.",
+        )]
+    return []
+
+
+# ── Main entry point ──────────────────────────────────────────────────────────
+
+def run_static_validation(doc: SkillDocument) -> StaticValidationReport:
+    """
+    Run all agentskills.io spec validation rules against a parsed SkillDocument.
+
+    Returns a StaticValidationReport with individual findings, overall status,
+    and a 0-100 score.
+    """
+    findings: list[Finding] = []
+
+    findings.extend(_check_name(doc.name))
+    findings.extend(_check_description(doc.description))
+    findings.extend(_check_compatibility(doc.compatibility))
+    findings.extend(_check_metadata(doc.metadata_field))
+    findings.extend(_check_allowed_tools(doc.allowed_tools))
+    findings.extend(_check_body(doc))
+    findings.extend(_check_unknown_fields(doc.frontmatter))
+
+    # Overall status: fail if any failures, warn if any warnings, else pass
+    has_fail = any(f.status == RuleStatus.FAIL for f in findings)
+    has_warn = any(f.status == RuleStatus.WARN for f in findings)
+
+    if has_fail:
+        overall_status = RuleStatus.FAIL
+    elif has_warn:
+        overall_status = RuleStatus.WARN
+    else:
+        overall_status = RuleStatus.PASS
+
+    # Score: start at 100, subtract 15 per failure, 5 per warning
+    fail_count = sum(1 for f in findings if f.status == RuleStatus.FAIL)
+    warn_count = sum(1 for f in findings if f.status == RuleStatus.WARN)
+    score = max(0, 100 - (fail_count * 15) - (warn_count * 5))
+
+    return StaticValidationReport(
+        findings=findings,
+        overall_status=overall_status,
+        score=score,
+    )
