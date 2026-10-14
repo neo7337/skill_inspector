@@ -1,0 +1,33 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: skill_inspector_backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env          # optional — copy .env.example → .env and fill in keys
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Ollama runs on the host machine; host.docker.internal resolves to it from inside the container.
+      # On Linux, the extra_hosts entry below makes this hostname available.
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    extra_hosts:
+      # Needed on Linux — Mac & Windows Docker Desktop provide this automatically
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: skill_inspector_frontend
+    ports:
+      - "5173:5173"
+    environment:
+      # Tells the Vite proxy where to reach the backend inside Docker's network
+      - VITE_API_URL=http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
