@@ -1,12 +1,21 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import axios from 'axios'
-import type { StaticValidationResult, LLMValidationResult, ProviderConfig, ApplyableFix } from './types'
+import type {
+  StaticValidationResult,
+  LLMValidationResult,
+  ProviderConfig,
+  ApplyableFix,
+  RepairPlanResult,
+} from './types'
 import { DEFAULT_MODELS } from './types'
-import { validateStatic, validateLLM } from './api'
+import { validateStatic, validateLLM, getRepairPlan } from './api'
 import { StaticReport } from './components/StaticReport'
 import { LLMReport } from './components/LLMReport'
 import { ProviderConfigPanel } from './components/ProviderConfigPanel'
 import { ThemeToggle } from './components/ThemeToggle'
+import { DiffViewer } from './components/DiffViewer'
+import { ScenarioMatrix } from './components/ScenarioMatrix'
+import { TrajectoryReport } from './components/TrajectoryReport'
 import { VALID_SKILL_EXAMPLE, BROKEN_SKILL_EXAMPLE } from './examples'
 import { useTheme } from './hooks/useTheme'
 import { applyFix } from './utils/applyFix'
@@ -78,7 +87,9 @@ export default function App() {
     base_url: '',
   })
 
-  const [activeTab, setActiveTab] = useState<'static' | 'llm'>('static')
+  const [activeTab, setActiveTab] = useState<'static' | 'llm' | 'repair' | 'scenarios' | 'profiler'>('static')
+  const [repairPlan, setRepairPlan] = useState<RepairPlanResult | null>(null)
+  const [repairLoading, setRepairLoading] = useState(false)
   const [backendStatus, setBackendStatus] = useState<'unknown' | 'ok' | 'error'>('unknown')
   const [toasts, setToasts] = useState<ToastState[]>([])
 
@@ -139,6 +150,28 @@ export default function App() {
         }
       })
   }, [debouncedContent])
+
+  // ── Auto-generate repair plan on content change ──────────────────────────
+
+  const fetchRepairPlan = useCallback(async () => {
+    if (!debouncedContent.trim()) {
+      setRepairPlan(null)
+      return
+    }
+    try {
+      setRepairLoading(true)
+      const plan = await getRepairPlan(debouncedContent)
+      setRepairPlan(plan)
+    } catch {
+      // Ignore background plan error
+    } finally {
+      setRepairLoading(false)
+    }
+  }, [debouncedContent])
+
+  useEffect(() => {
+    fetchRepairPlan()
+  }, [fetchRepairPlan])
 
   // ── Mark LLM result stale when content changes post-run ──────────────────
 
@@ -266,6 +299,15 @@ export default function App() {
               >
                 ✗ Broken
               </button>
+              {repairPlan?.diff.has_changes && (
+                <button
+                  onClick={() => setActiveTab('repair')}
+                  className="text-xs px-2.5 py-1 rounded-md font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm flex items-center gap-1 transition-all"
+                  title="View proposed fixes in Diff & Repair tab"
+                >
+                  <span>✨ Auto-Fix ({repairPlan.repairs_applied.length})</span>
+                </button>
+              )}
               {content && (
                 <button
                   onClick={() => { setContent(''); setStaticResult(null); setLlmResult(null); setLlmContentStale(false) }}
@@ -315,15 +357,15 @@ export default function App() {
         {/* Right: Report panel */}
         <div className="w-1/2 flex flex-col">
           {/* Tab bar */}
-          <div className={`px-4 py-2 border-b flex items-center gap-1 ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+          <div className={`px-4 py-2 border-b flex items-center gap-1 overflow-x-auto ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
             <button
               onClick={() => setActiveTab('static')}
-              className={`px-3 py-1.5 text-xs rounded transition-colors ${activeTab === 'static'
+              className={`px-3 py-1.5 text-xs rounded transition-colors whitespace-nowrap ${activeTab === 'static'
                   ? isDark ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-900'
                   : isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
                 }`}
             >
-              Static Analysis
+              Static Rules
               {staticResult && (
                 <span className={`ml-1.5 w-2 h-2 rounded-full inline-block ${staticResult.overall_status === 'pass' ? 'bg-emerald-500' :
                     staticResult.overall_status === 'warn' ? 'bg-amber-500' : 'bg-red-500'
@@ -332,12 +374,12 @@ export default function App() {
             </button>
             <button
               onClick={() => setActiveTab('llm')}
-              className={`px-3 py-1.5 text-xs rounded transition-colors ${activeTab === 'llm'
+              className={`px-3 py-1.5 text-xs rounded transition-colors whitespace-nowrap ${activeTab === 'llm'
                   ? isDark ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-900'
                   : isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
                 }`}
             >
-              LLM Analysis
+              LLM Judge
               {llmResult && (
                 <span className={`ml-1.5 w-2 h-2 rounded-full inline-block ${llmResult.overall_status === 'pass' ? 'bg-emerald-500' :
                     llmResult.overall_status === 'warn' ? 'bg-amber-500' : 'bg-red-500'
@@ -346,6 +388,38 @@ export default function App() {
               {llmContentStale && !llmLoading && (
                 <span className="ml-1 text-amber-400 text-xs">●</span>
               )}
+            </button>
+            <button
+              onClick={() => setActiveTab('repair')}
+              className={`px-3 py-1.5 text-xs rounded transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'repair'
+                  ? isDark ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-900'
+                  : isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+                }`}
+            >
+              <span>Diff & Repair</span>
+              {repairPlan?.diff.has_changes && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-400 font-bold">
+                  {repairPlan.repairs_applied.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('scenarios')}
+              className={`px-3 py-1.5 text-xs rounded transition-colors whitespace-nowrap ${activeTab === 'scenarios'
+                  ? isDark ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-900'
+                  : isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+                }`}
+            >
+              Synthetic Tests
+            </button>
+            <button
+              onClick={() => setActiveTab('profiler')}
+              className={`px-3 py-1.5 text-xs rounded transition-colors whitespace-nowrap ${activeTab === 'profiler'
+                  ? isDark ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-900'
+                  : isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+                }`}
+            >
+              Trajectory Profiler
             </button>
           </div>
 
@@ -396,6 +470,36 @@ export default function App() {
                   onApplyFix={handleApplyFix}
                 />
               </>
+            )}
+
+            {activeTab === 'repair' && (
+              <DiffViewer
+                content={content}
+                repairPlan={repairPlan}
+                loading={repairLoading}
+                onApplyRepairs={(repaired) => {
+                  setContent(repaired)
+                  setApplyFlash(true)
+                  setTimeout(() => setApplyFlash(false), 800)
+                  showToast('✓ Auto-repairs applied to editor', 'success')
+                  fetchRepairPlan()
+                }}
+                onRefreshPlan={fetchRepairPlan}
+                providerConfig={providerConfig}
+              />
+            )}
+
+            {activeTab === 'scenarios' && (
+              <ScenarioMatrix
+                content={content}
+                providerConfig={providerConfig}
+              />
+            )}
+
+            {activeTab === 'profiler' && (
+              <TrajectoryReport
+                skillContent={content}
+              />
             )}
           </div>
         </div>

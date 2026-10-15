@@ -6,9 +6,12 @@ A web-based validator for [agentskills.io](https://agentskills.io) format SKILL.
 
 - **Live editor** — paste SKILL.md content and see static validation in real-time (< 350ms)
 - **Static analysis** — all agentskills.io spec rules (name constraints, description quality, metadata types, body length)
+- **Interactive "Diff & Repair" Auto-Fixer** — one-click ESLint-style `--fix` and CLI repair for frontmatter schemas, names, and AI instruction refactoring with unified visual diffs
+- **Synthetic Scenario & Edge-Case Generator** — automatically synthesizes 10–16 realistic scenarios across Happy Path, Adversarial, Tool Failure Modes, and Scope Boundaries, exportable to Pytest, JSON, and Markdown
+- **Trajectory & Step-Economy Profiler** — measures agent execution paths against baselines, flagging redundant file reads, search loops, error ping-pongs, and context bloat
 - **LLM-as-Judge** — evaluates instruction clarity, description quality, scope definition, and token efficiency
 - **Multi-provider** — OpenAI, Anthropic, or Ollama (local models, no API key needed)
-- **Unified report** — scorecard + numeric scores + actionable fix suggestions per dimension
+- **Skill Inspector CLI** — command-line suite with `validate`, `fix`, `profile`, and `generate-tests`
 
 ## Quick Start
 
@@ -48,8 +51,27 @@ docker compose logs -f
 docker compose down
 ```
 
-## Known issues with docker
-- Unable to connect to locally running Ollama
+## CLI Usage
+
+The companion CLI provides terminal validation, auto-repair, trajectory profiling, and test generation:
+
+```bash
+# Validate SKILL.md
+python -m app.cli validate path/to/SKILL.md [--llm]
+
+# Auto-fix frontmatter schema errors & show diff
+python -m app.cli fix path/to/SKILL.md --dry-run
+python -m app.cli fix path/to/SKILL.md --apply
+
+# AI instruction refactoring via CLI
+python -m app.cli fix path/to/SKILL.md --llm --apply
+
+# Profile execution trajectory trace
+python -m app.cli profile path/to/trace.json --baseline 3
+
+# Generate synthetic test scenario matrix
+python -m app.cli generate-tests path/to/SKILL.md --format pytest --output tests/test_skill.py
+```
 
 ## Backend
 
@@ -62,6 +84,12 @@ FastAPI server at `http://localhost:8000`.
 | GET | `/health` | Health check |
 | POST | `/validate/static` | Static structural validation |
 | POST | `/validate/llm` | LLM-as-Judge evaluation |
+| POST | `/repair/plan` | Generate repair plan and unified diff |
+| POST | `/repair/apply` | Apply deterministic frontmatter & schema repairs |
+| POST | `/repair/refactor-llm` | AI-assisted instruction refactoring |
+| POST | `/scenarios/generate` | Synthesize edge-case test scenario suite |
+| POST | `/scenarios/export` | Export test scenarios to Pytest, JSON, or Markdown |
+| POST | `/profiler/trajectory` | Profile agent execution trace for redundancy & step economy |
 
 ### Run tests
 
@@ -71,7 +99,7 @@ make test
 cd backend && PYTHONPATH=. .venv/bin/pytest tests/ -v
 ```
 
-57 tests covering parser, static validator, API endpoints, and LLM judge unit tests.
+89 tests covering parser, static validator, repair engine, trajectory profiler, scenario generator, and API endpoints.
 
 ## LLM Provider Setup
 

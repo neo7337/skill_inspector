@@ -255,6 +255,40 @@ async def _invoke_provider(config: ProviderConfig, messages: list[dict]) -> str:
     return await _call_openai(config, messages)
 
 
+async def call_provider_chat(
+    config: ProviderConfig,
+    system_prompt: str,
+    user_prompt: str,
+) -> str:
+    """Reusable provider call for chat completions with system and user prompts."""
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+    return await _invoke_provider(config, messages)
+
+
+def extract_json_from_text(raw: str) -> dict[str, any]:
+    """Extract and parse JSON object from markdown code fences or raw text."""
+    cleaned = raw.strip()
+    if "```" in cleaned:
+        match = re.search(r"```(?:json)?\s*\n(.*?)\n```", cleaned, re.DOTALL)
+        if match:
+            cleaned = match.group(1).strip()
+        else:
+            cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
+            cleaned = re.sub(r"\n?```$", "", cleaned).strip()
+
+    # If first char is not { or [, find the first { or [
+    if not (cleaned.startswith("{") or cleaned.startswith("[")):
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if start != -1 and end != -1:
+            cleaned = cleaned[start : end + 1]
+
+    return json.loads(cleaned)
+
+
 # ── Response parsing ──────────────────────────────────────────────────────────
 
 def _parse_llm_response(raw: str, model_used: str, provider_used: str) -> LLMReport:
@@ -262,14 +296,8 @@ def _parse_llm_response(raw: str, model_used: str, provider_used: str) -> LLMRep
     Parse raw LLM response string into LLMReport.
     Handles JSON extraction from markdown code blocks if needed.
     """
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
-        cleaned = re.sub(r"\n?```$", "", cleaned)
-        cleaned = cleaned.strip()
-
     try:
-        data = json.loads(cleaned)
+        data = extract_json_from_text(raw)
     except json.JSONDecodeError as exc:
         raise ValueError(f"LLM returned invalid JSON: {exc}\nRaw response: {raw[:500]}") from exc
 

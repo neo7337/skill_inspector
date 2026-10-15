@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 
+from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -12,13 +13,17 @@ from pydantic import BaseModel
 from app.parser import ParseError, parse_skill_md
 from app.validators.static import run_static_validation
 from app.validators.llm_judge import ProviderConfig, run_llm_validation
+from app.repair import DeterministicRepairEngine, LLMRepairEngine
+from app.scenarios import ScenarioGenerator, export_as_json, export_as_pytest, export_as_markdown
+from app.scenarios.models import ScenarioSuite
+from app.profiler import TrajectoryProfiler, parse_trace_from_raw
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="AI Skill Validator",
-    description="Validates agentskills.io SKILL.md files via static rules and LLM-as-a-Judge.",
-    version="1.0.0",
+    title="AI Skill Validator & Profiler",
+    description="Validates, auto-fixes, profiles trajectories, and generates synthetic tests for agentskills.io SKILL.md files.",
+    version="1.1.0",
 )
 
 app.add_middleware(
@@ -47,6 +52,43 @@ class LLMValidateRequest(BaseModel):
 class ParseErrorResponse(BaseModel):
     error: str
     type: str = "parse_error"
+
+
+class RepairPlanRequest(BaseModel):
+    content: str
+
+
+class RepairApplyRequest(BaseModel):
+    content: str
+
+
+class LLMRefactorRequest(BaseModel):
+    content: str
+    provider: str
+    model: str
+    api_key: str | None = None
+    base_url: str | None = None
+    issues: list[str] | None = None
+
+
+class ScenarioGenerateRequest(BaseModel):
+    content: str
+    count: int = 12
+    provider: str | None = None
+    model: str | None = None
+    api_key: str | None = None
+    base_url: str | None = None
+
+
+class ScenarioExportRequest(BaseModel):
+    suite: dict[str, Any]
+    format: str = "json"  # json | pytest | markdown
+
+
+class TrajectoryProfileRequest(BaseModel):
+    trace: Any  # JSON object, list of tool calls, or JSONL string
+    skill_content: str | None = None
+    baseline_steps: int | None = None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -134,3 +176,134 @@ async def validate_llm(request: LLMValidateRequest):
         report.overall_score,
     )
     return report.model_dump()
+
+
+# ── Repair Endpoints ──────────────────────────────────────────────────────────
+
+@app.post("/repair/plan")
+def repair_plan(request: RepairPlanRequest):
+    """
+    Generate deterministic repair plan and unified diff without modifying original text.
+    """
+    if not request.content or not request.content.strip():
+        raise HTTPException(status_code=422, detail="Content must not be empty.")
+
+    engine = DeterministicRepairEngine()
+    result = engine.repair(request.content)
+    return result.model_dump()
+
+
+@app.post("/repair/apply")
+def repair_apply(request: RepairApplyRequest):
+    """
+    Apply all deterministic repairs to SKILL.md content and return repaired content.
+    """
+    if not request.content or not request.content.strip():
+        raise HTTPException(status_code=422, detail="Content must not be empty.")
+
+    engine = DeterministicRepairEngine()
+    result = engine.repair(request.content)
+    return {
+        "repaired_content": result.repaired_content,
+        "repairs_count": len(result.repairs_applied),
+        "diff": result.diff.model_dump(),
+    }
+
+
+@app.post("/repair/refactor-llm")
+async def repair_refactor_llm(request: LLMRefactorRequest):
+    """
+    Use LLM to refactor ambiguous instructions, add clear step structure and explicit boundaries.
+    """
+    if not request.content or not request.content.strip():
+        raise HTTPException(status_code=422, detail="Content must not be empty.")
+
+    config = ProviderConfig(
+        provider=request.provider,  # type: ignore[arg-type]
+        model=request.model.strip(),
+        api_key=request.api_key or None,
+        base_url=request.base_url or None,
+    )
+
+    engine = LLMRepairEngine()
+    result = await engine.refactor(request.content, config, issues=request.issues)
+    return result.model_dump()
+
+
+# ── Synthetic Scenario Endpoints ──────────────────────────────────────────────
+
+@app.post("/scenarios/generate")
+async def generate_scenarios(request: ScenarioGenerateRequest):
+    """
+    Generate synthetic test scenarios across Happy Path, Adversarial, Tool Failure, and Scope Boundaries.
+    """
+    if not request.content or not request.content.strip():
+        raise HTTPException(status_code=422, detail="Content must not be empty.")
+
+    config = None
+    if request.provider and request.model:
+        config = ProviderConfig(
+            provider=request.provider,  # type: ignore[arg-type]
+            model=request.model.strip(),
+            api_key=request.api_key or None,
+            base_url=request.base_url or None,
+        )
+
+    generator = ScenarioGenerator()
+    suite = await generator.generate(request.content, config=config, count=request.count)
+    return suite.model_dump()
+
+
+@app.post("/scenarios/export")
+def export_scenarios(request: ScenarioExportRequest):
+    """
+    Export scenario suite to JSON, Pytest test script, or Markdown.
+    """
+    try:
+        suite = ScenarioSuite(**request.suite)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid scenario suite format: {exc}")
+
+    fmt = request.format.lower().strip()
+    if fmt == "pytest":
+        content = export_as_pytest(suite)
+        content_type = "text/x-python"
+        filename = f"test_{suite.skill_name.replace('-', '_')}.py"
+    elif fmt == "markdown":
+        content = export_as_markdown(suite)
+        content_type = "text/markdown"
+        filename = f"test_matrix_{suite.skill_name}.md"
+    else:
+        content = export_as_json(suite)
+        content_type = "application/json"
+        filename = f"scenarios_{suite.skill_name}.json"
+
+    return {
+        "content": content,
+        "format": fmt,
+        "filename": filename,
+        "content_type": content_type,
+    }
+
+
+# ── Trajectory Profiler Endpoint ──────────────────────────────────────────────
+
+@app.post("/profiler/trajectory")
+def profile_trajectory(request: TrajectoryProfileRequest):
+    """
+    Profile agent execution trajectory for redundant calls, step budget, and token economy.
+    """
+    if not request.trace:
+        raise HTTPException(status_code=422, detail="Trace must not be empty.")
+
+    profiler = TrajectoryProfiler()
+    try:
+        report = profiler.profile(
+            request.trace,
+            skill_content=request.skill_content,
+            custom_baseline_steps=request.baseline_steps,
+        )
+        return report.model_dump()
+    except Exception as exc:
+        logger.exception("Failed to profile trajectory: %s", exc)
+        raise HTTPException(status_code=422, detail=f"Trajectory parsing error: {exc}")
