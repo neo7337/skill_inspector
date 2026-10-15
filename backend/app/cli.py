@@ -28,6 +28,8 @@ app = typer.Typer(
 )
 console = Console()
 
+with open('version.txt', 'r') as f:
+    __cli_version__ = f.read()
 
 @app.command("validate")
 def validate_command(
@@ -228,6 +230,16 @@ def generate_tests_command(
         Path(out_name).write_text(formatted_output, encoding="utf-8")
         console.print(f"\n[bold green]✓ Exported suite to:[/] {out_name}")
 
+@app.command("version")
+def version_command():
+    """Show Skill Inspector version."""
+    console.print(f"Skill Inspector Version: [bold green]{__cli_version__}[/]")
+
+@app.command("help")
+def help_command():
+    """Show help message."""
+    console.print(f"Skill Inspector Version: [bold green]{__cli_version__}[/]")
+    console.print(f"Use [bold]--help[/bold] for more information.")
 
 if __name__ == "__main__":
     app()
