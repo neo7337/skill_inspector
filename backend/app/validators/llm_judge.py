@@ -15,9 +15,9 @@ import json
 import logging
 import re
 import time
-from typing import Literal
+from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.parser import FileReference, SkillDocument
 
@@ -37,11 +37,33 @@ class ProviderConfig(BaseModel):
 
 # ── Report models ─────────────────────────────────────────────────────────────
 
+class LLMSuggestion(BaseModel):
+    text: str                         # human-readable recommendation
+    example: Optional[str] = None     # optional rewritten snippet
+
+
 class LLMDimensionResult(BaseModel):
     score: int = Field(ge=0, le=100)
     status: Literal["pass", "warn", "fail"]
     findings: list[str]
-    suggestions: list[str]
+    suggestions: list[LLMSuggestion]  # was list[str]
+
+    @field_validator("suggestions", mode="before")
+    @classmethod
+    def normalize_suggestions(cls, v):
+        if not isinstance(v, list):
+            return []
+        normalized = []
+        for item in v:
+            if isinstance(item, str):
+                normalized.append(LLMSuggestion(text=item))
+            elif isinstance(item, dict):
+                normalized.append(LLMSuggestion(**item))
+            elif isinstance(item, LLMSuggestion):
+                normalized.append(item)
+            else:
+                normalized.append(LLMSuggestion(text=str(item)))
+        return normalized
 
 
 class SkillTokenEstimate(BaseModel):
@@ -106,9 +128,10 @@ Status rules:
 Output rules:
 - Return ONLY valid JSON. No markdown, no explanation, no trailing text.
 - Complete the entire JSON object. Never truncate a string or omit a closing brace.
-- Each finding and suggestion is one short sentence (max 20 words).
+- Each finding is one short sentence (max 25 words) describing a specific observation.
+- Each suggestion has a "text" field (max 25 words) and an optional "example" field with a ready-to-paste snippet.
 - At most 2 findings and 2 suggestions per dimension.
-- If there is no suggestion, use [] — never write "None needed".
+- If there are no suggestions, use [] — never write "None needed".
 
 You MUST respond with ONLY this JSON structure:
 {
@@ -116,25 +139,36 @@ You MUST respond with ONLY this JSON structure:
     "score": <0-100>,
     "status": "<pass|warn|fail>",
     "findings": ["<specific observation about what was found>"],
-    "suggestions": ["<specific actionable fix>"]
+    "suggestions": [
+      {
+        "text": "<specific actionable recommendation>",
+        "example": "<optional: ready-to-paste rewrite or null>"
+      }
+    ]
   },
   "instruction_clarity": {
     "score": <0-100>,
     "status": "<pass|warn|fail>",
     "findings": ["<specific observation>"],
-    "suggestions": ["<specific actionable fix>"]
+    "suggestions": [
+      { "text": "<specific actionable recommendation>", "example": "<optional rewrite or null>" }
+    ]
   },
   "scope_and_boundaries": {
     "score": <0-100>,
     "status": "<pass|warn|fail>",
     "findings": ["<specific observation>"],
-    "suggestions": ["<specific actionable fix>"]
+    "suggestions": [
+      { "text": "<specific actionable recommendation>", "example": "<optional rewrite or null>" }
+    ]
   },
   "token_efficiency": {
     "score": <0-100>,
     "status": "<pass|warn|fail>",
     "findings": ["<specific observation>"],
-    "suggestions": ["<specific actionable fix>"]
+    "suggestions": [
+      { "text": "<specific actionable recommendation>", "example": "<optional rewrite or null>" }
+    ]
   }
 }"""
 
@@ -280,7 +314,7 @@ def _make_error_report(
         score=0,
         status="fail",
         findings=[f"LLM evaluation failed: {error_message}"],
-        suggestions=["Check your API key, model name, and provider configuration."],
+        suggestions=[LLMSuggestion(text="Check your API key, model name, and provider configuration.")],
     )
     return LLMReport(
         description_quality=error_dim,

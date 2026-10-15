@@ -2,12 +2,19 @@
 
 export type RuleStatus = 'pass' | 'warn' | 'fail'
 
+export type FixKind = 'frontmatter_field' | 'body_section' | 'text_replace'
+
 export interface StaticFinding {
   dimension: string
   rule: string
   status: RuleStatus
   message: string
   suggestion: string
+  // Structured fix fields (populated by backend for deterministic rules)
+  fix_snippet?: string
+  fix_kind?: FixKind
+  fix_field?: string
+  fix_replace_target?: string
 }
 
 export interface SkillTokenEstimate {
@@ -34,11 +41,17 @@ export interface StaticValidationResult {
   type?: 'parse_error'
 }
 
+// Structured LLM suggestion with optional example rewrite
+export interface LLMSuggestion {
+  text: string
+  example?: string | null
+}
+
 export interface LLMDimensionResult {
   score: number
   status: RuleStatus
   findings: string[]
-  suggestions: string[]
+  suggestions: LLMSuggestion[]
 }
 
 export interface LLMValidationResult {
@@ -67,4 +80,12 @@ export const DEFAULT_MODELS: Record<LLMProvider, string> = {
   openai: 'gpt-4o',
   anthropic: 'claude-3-5-haiku-20241022',
   ollama: 'llama3',
+}
+
+// Represents a fix that can be applied to the editor content
+export interface ApplyableFix {
+  kind: FixKind
+  field?: string          // for frontmatter_field: the YAML key name
+  snippet: string         // text to insert or replace with
+  replaceTarget?: string  // for text_replace: the text to find
 }
