@@ -34,6 +34,23 @@ Or run both in one command (background):
 make dev
 ```
 
+Or run both using Docker:
+```bash
+# Start services in background
+docker compose up -d
+
+# View logs (frontend, backend, or both)
+docker compose logs -f frontend
+docker compose logs -f backend
+docker compose logs -f
+
+# Stop services
+docker compose down
+```
+
+## Known issues with docker
+- Unable to connect to locally running Ollama
+
 ## Backend
 
 FastAPI server at `http://localhost:8000`.
@@ -147,3 +164,7 @@ All rules from the [agentskills.io specification](https://agentskills.io/specifi
 Scores: 0–100 per dimension. Pass ≥ 75, Warn ≥ 50, Fail < 50.
 
 > LLM scores may vary ±5–10 points between runs. Focus on the textual findings and suggestions rather than exact numbers.
+
+# License
+
+Licensed under [MIT License](LICENSE)
