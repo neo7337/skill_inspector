@@ -127,34 +127,55 @@ cd backend && PYTHONPATH=. .venv/bin/pytest tests/ -v
 ## Project Structure
 
 ```
-skills-scope/
+skill_inspector/
 ├── backend/
 │   ├── app/
+│   │   ├── cli.py               # CLI companion (typer + rich)
 │   │   ├── main.py              # FastAPI app + endpoints
 │   │   ├── parser.py            # SKILL.md YAML frontmatter parser
+│   │   ├── profiler/            # Trajectory & Step-Economy Profiler
+│   │   │   ├── engine.py        # Redundancy, loop & bloat detection
+│   │   │   └── models.py        # Trace & profile data models
+│   │   ├── repair/              # Diff & Repair Auto-Fixer
+│   │   │   ├── diff_utils.py    # Unified diff & patch generator
+│   │   │   ├── engine.py        # Deterministic schema & frontmatter repair
+│   │   │   └── llm_repair.py    # AI-assisted instruction refactoring
+│   │   ├── scenarios/           # Synthetic Scenario & Edge-Case Generator
+│   │   │   ├── exporter.py      # Pytest, JSON & Markdown exporters
+│   │   │   ├── generator.py     # Scenario generation pipeline
+│   │   │   └── models.py        # Test scenario data models
 │   │   └── validators/
 │   │       ├── static.py        # Static rules engine (all spec rules)
 │   │       └── llm_judge.py     # LLM-as-Judge (OpenAI/Anthropic/Ollama)
 │   ├── tests/
+│   │   ├── test_api.py
+│   │   ├── test_new_endpoints.py
 │   │   ├── test_parser.py
-│   │   ├── test_static_validator.py
-│   │   └── test_api.py
+│   │   ├── test_profiler.py
+│   │   ├── test_repair.py
+│   │   ├── test_scenarios.py
+│   │   └── test_static_validator.py
 │   └── requirements.txt
 ├── frontend/
 │   └── src/
-│       ├── App.tsx              # Main app with live editor + report tabs
+│       ├── App.tsx              # Main app with live editor + 5 analysis tabs
 │       ├── api.ts               # API client (axios)
 │       ├── types.ts             # Shared TypeScript types
 │       ├── examples.ts          # Sample SKILL.md content
 │       └── components/
-│           ├── StaticReport.tsx # Static analysis report UI
+│           ├── DiffViewer.tsx   # Interactive Diff & Auto-Fixer UI
 │           ├── LLMReport.tsx    # LLM analysis report UI
 │           ├── ProviderConfigPanel.tsx  # LLM provider config UI
+│           ├── ScenarioMatrix.tsx       # Synthetic scenario matrix UI
+│           ├── ScoreBar.tsx     # Score progress bars
+│           ├── StaticReport.tsx # Static analysis report UI
 │           ├── StatusBadge.tsx  # pass/warn/fail badges
-│           └── ScoreBar.tsx     # Score progress bars
+│           ├── ThemeToggle.tsx  # Dark/light theme switcher
+│           └── TrajectoryReport.tsx     # Trajectory profiler & timeline UI
 ├── samples/
-│   ├── valid-skill/SKILL.md     # Example of a valid skill
-│   └── broken-skill/SKILL.md   # Example with intentional errors
+│   ├── broken-skill/SKILL.md    # Example with intentional errors
+│   ├── sample-trace.json        # Example execution trace for profiler
+│   └── valid-skill/SKILL.md     # Example of a valid skill
 └── Makefile
 ```
 
