@@ -28,6 +28,8 @@ services:
     environment:
       # Tells the Vite proxy where to reach the backend inside Docker's network
       - VITE_API_URL=http://backend:8000
+      - ENABLE_SYNTHETIC_TESTS=1
+      - ENABLE_TRAJECTORY_PROFILER=1
     depends_on:
       - backend
     restart: unless-stopped

@@ -411,6 +411,9 @@ export default function App() {
                 }`}
             >
               Synthetic Tests
+              {(
+                <span className="ml-1 text-amber-400 text-xs">Beta</span>
+              )}
             </button>
             <button
               onClick={() => setActiveTab('profiler')}
@@ -420,6 +423,9 @@ export default function App() {
                 }`}
             >
               Trajectory Profiler
+              {(
+                <span className="ml-1 text-amber-400 text-xs">Beta</span>
+              )}
             </button>
           </div>
 

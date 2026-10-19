@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import time
 from typing import Literal, Optional
@@ -24,6 +25,8 @@ from app.parser import FileReference, SkillDocument
 logger = logging.getLogger(__name__)
 
 MAX_OUTPUT_TOKENS = 4000
+
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")  # default for local Ollama
 
 
 # ── Provider config ───────────────────────────────────────────────────────────
@@ -194,7 +197,7 @@ def _get_openai_client(config: ProviderConfig):
         kwargs["api_key"] = "ollama"  # Ollama requires a non-empty key
 
     if config.provider == "ollama":
-        base_url = config.base_url or "http://localhost:11434"
+        base_url = config.base_url or OLLAMA_BASE_URL
         kwargs["base_url"] = f"{base_url.rstrip('/')}/v1"
 
     return AsyncOpenAI(**kwargs)

@@ -139,6 +139,17 @@ export function ProviderConfigPanel({
                 placeholder="http://localhost:11434"
                 className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-sm text-gray-900 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-mono"
               />
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                Ollama must be running locally. Default: http://localhost:11434
+              </p>
+              <div className="flex items-center p-4 mb-4 text-sm text-yellow-800 border-l-4 border-yellow-500 bg-yellow-50" role="alert">
+                <svg className="flex-shrink-0 inline w-4 h-4 me-3" aria-hidden="true" xmlns="http://w3.org" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM10 15a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm1-4H9V5h2v6Z"/>
+                </svg>
+                <div>
+                  <span className="font-medium">Warning!</span> If you are using docker-compose to run the app, leave the URL empty.
+                </div>
+              </div>
             </div>
           )}
 
