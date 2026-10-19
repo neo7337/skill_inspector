@@ -27,6 +27,11 @@ A web-based validator for [agentskills.io](https://agentskills.io) format SKILL.
 # Install all dependencies
 make install
 
+# Create an .env.local file in frontend folder
+VITE_API_URL=http://localhost:8000
+VITE_ENABLE_SYNTHETIC_TESTS=0
+VITE_ENABLE_TRAJECTORY_PROFILER=0
+
 # Start backend + frontend (two terminals, or run separately)
 make backend   # terminal 1 — http://localhost:8000
 make frontend  # terminal 2 — http://localhost:5173

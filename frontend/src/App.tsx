@@ -31,6 +31,9 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced
 }
 
+const enableSyntheticTests = import.meta.env.VITE_ENABLE_SYNTHETIC_TESTS === '1'
+const enableTrajectoryProfiler = import.meta.env.VITE_ENABLE_TRAJECTORY_PROFILER === '1'
+
 // ── Toast ──────────────────────────────────────────────────────────────────
 
 interface ToastState {
@@ -403,7 +406,7 @@ export default function App() {
                 </span>
               )}
             </button>
-            <button
+            {enableSyntheticTests && <button
               onClick={() => setActiveTab('scenarios')}
               className={`px-3 py-1.5 text-xs rounded transition-colors whitespace-nowrap ${activeTab === 'scenarios'
                   ? isDark ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-900'
@@ -414,8 +417,8 @@ export default function App() {
               {(
                 <span className="ml-1 text-amber-400 text-xs">Beta</span>
               )}
-            </button>
-            <button
+            </button>}
+            {enableTrajectoryProfiler && <button
               onClick={() => setActiveTab('profiler')}
               className={`px-3 py-1.5 text-xs rounded transition-colors whitespace-nowrap ${activeTab === 'profiler'
                   ? isDark ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-900'
@@ -426,7 +429,7 @@ export default function App() {
               {(
                 <span className="ml-1 text-amber-400 text-xs">Beta</span>
               )}
-            </button>
+            </button>}
           </div>
 
           {/* Panel content */}
