@@ -5,6 +5,7 @@ Command-line companion for validating, auto-fixing, profiling, and generating te
 from __future__ import annotations
 
 import json
+from app import __version__
 from pathlib import Path
 from typing import Optional
 import typer
@@ -20,6 +21,7 @@ from app.validators.llm_judge import ProviderConfig, run_llm_validation
 from app.repair import DeterministicRepairEngine, LLMRepairEngine
 from app.profiler import TrajectoryProfiler
 from app.scenarios import ScenarioGenerator, export_as_json, export_as_pytest, export_as_markdown
+from importlib.metadata import version
 
 app = typer.Typer(
     name="skill-inspector",
@@ -28,8 +30,20 @@ app = typer.Typer(
 )
 console = Console()
 
-with open('version.txt', 'r') as f:
-    __cli_version__ = f.read()
+def version_calback(value: bool):
+    if value:
+        # 'skill-inspector' must match the name in pytproject.toml
+        typer.echo(f"skill-inspector cli version: {__version__}")
+        raise typer.Exit()
+
+@app.callback
+def main(
+    version: bool = typer.Option(
+        None, "--version", "-v", callback=version_calback, is_eager=True, help="Show the application version"
+    )
+):
+    """Skill Inspector CLI"""
+    pass
 
 @app.command("validate")
 def validate_command(
@@ -233,13 +247,16 @@ def generate_tests_command(
 @app.command("version")
 def version_command():
     """Show Skill Inspector version."""
-    console.print(f"Skill Inspector Version: [bold green]{__cli_version__}[/]")
+    console.print(f"Skill Inspector Version: [bold green]{__version__}[/]")
 
 @app.command("help")
 def help_command():
     """Show help message."""
-    console.print(f"Skill Inspector Version: [bold green]{__cli_version__}[/]")
+    console.print(f"Skill Inspector Version: [bold green]{__version__}[/]")
     console.print(f"Use [bold]--help[/bold] for more information.")
 
-if __name__ == "__main__":
+def main_cli():
     app()
+
+if __name__ == "__main__":
+    main_cli()

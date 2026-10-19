@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "skill-inspector"
+version = "v0.0.1"
+description = "Skill Inspector CLI tool"
+dependencies = [
+    "typer"
+]
+
+[project.scripts]
+skill-inspector = "app.cli:main"
+
+[tool.setuptools]
+packages = ["app"]
