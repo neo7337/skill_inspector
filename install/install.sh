@@ -4,7 +4,7 @@ set -e
 TARGET_VERSION=${1:-main}
 
 APP_NAME="skill-inspector"
-REPO_URL="git+https://github.com/neo7337/skill_inspector.git@$TARGET_VERSION"
+REPO_URL="git+https://github.com/neo7337/skill_inspector.git@$TARGET_VERSION#subdirectory=backend"
 
 echo "Installing $APP_NAME ($TARGET_VERSION) directly from Github..."
 
@@ -18,16 +18,16 @@ if ! command -v pipx &> /dev/null; then
     export PATH="$PATH:$HOME/.local/bin"
 fi
 
-# Explicitly remove the old version if it exists to gurantee a clean slate
+# Explicitly remove the old version if it exists to guarantee a clean slate
 if pipx list | grep -q "$APP_NAME"; then
-    echo "Previous version detected. Removing it.."
-    pipx uninstall #$APP_NAME"
+    echo "Previous version detected. Removing it..."
+    pipx uninstall "$APP_NAME"
 fi
 
 echo "Fetching and installing package..."
 # pipx will automatically clone the repo into a temporary space, build it, and install the CLI
 pipx install "$REPO_URL" --force
 
-echo "Installion complete"
+echo "Installation complete!"
 echo "Run 'skill-inspector --version' to verify"
-echo "You can now run 'skill-instpector --help' from anywhere in your terminal."
+echo "You can now run 'skill-inspector --help' from anywhere in your terminal."
