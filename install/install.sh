@@ -15,7 +15,7 @@ if ! command -v pipx &> /dev/null; then
     python3 -m pipx ensurepath
 
     # Temporarily add local bin to PATH for the script's execution
-    export PATH="$PATH:$HOME"/.local/bin"
+    export PATH="$PATH:$HOME/.local/bin"
 fi
 
 # Explicitly remove the old version if it exists to gurantee a clean slate
