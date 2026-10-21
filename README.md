@@ -56,26 +56,38 @@ docker compose logs -f
 docker compose down
 ```
 
-## CLI Usage
+## CLI Installation and Usage
+
+### Install CLI
+
+Install the latest version
+```bash
+curl -sSL https://raw.githubusercontent.com/neo7337/skill_inspector/main/install/install.sh | bash
+```
+
+Install a particular version (e.g., v1.1.0)
+```bash
+curl -sSL https://raw.githubusercontent.com/neo7337/skill_inspector/main/install/install.sh | bash -s -- v1.1.0
+```
 
 The companion CLI provides terminal validation, auto-repair, trajectory profiling, and test generation:
 
 ```bash
 # Validate SKILL.md
-python -m app.cli validate path/to/SKILL.md [--llm]
+skill-inspector validate path/to/SKILL.md [--llm]
 
 # Auto-fix frontmatter schema errors & show diff
-python -m app.cli fix path/to/SKILL.md --dry-run
-python -m app.cli fix path/to/SKILL.md --apply
+skill-inspector fix path/to/SKILL.md --dry-run
+skill-inspector fix path/to/SKILL.md --apply
 
 # AI instruction refactoring via CLI
-python -m app.cli fix path/to/SKILL.md --llm --apply
+skill-inspector fix path/to/SKILL.md --llm --apply
 
 # Profile execution trajectory trace
-python -m app.cli profile path/to/trace.json --baseline 3
+skill-inspector profile path/to/trace.json --baseline 3
 
 # Generate synthetic test scenario matrix
-python -m app.cli generate-tests path/to/SKILL.md --format pytest --output tests/test_skill.py
+skill-inspector generate-tests path/to/SKILL.md --format pytest --output tests/test_skill.py
 ```
 
 ## Backend
