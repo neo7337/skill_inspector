@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "skill-inspector"
+version = "0.0.1"
+description = "Skill Inspector CLI tool"
+dependencies = [
+    "typer>=0.12.0",
+    "rich>=13.0.0",
+    "pydantic>=2.0.0",
+    "PyYAML>=6.0.0",
+    "httpx>=0.27.0",
+    "openai>=1.0.0",
+    "anthropic>=0.20.0",
+]
+
+[project.scripts]
+skill-inspector = "app.cli:main"
+
+[tool.setuptools.package-dir]
+"" = "backend"
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+include = ["app*"]

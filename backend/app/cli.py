@@ -30,16 +30,15 @@ app = typer.Typer(
 )
 console = Console()
 
-def version_calback(value: bool):
+def version_callback(value: bool):
     if value:
-        # 'skill-inspector' must match the name in pytproject.toml
         typer.echo(f"skill-inspector cli version: {__version__}")
         raise typer.Exit()
 
-@app.callback
-def main(
+@app.callback()
+def root_callback(
     version: bool = typer.Option(
-        None, "--version", "-v", callback=version_calback, is_eager=True, help="Show the application version"
+        None, "--version", "-v", callback=version_callback, is_eager=True, help="Show the application version"
     )
 ):
     """Skill Inspector CLI"""
@@ -255,8 +254,8 @@ def help_command():
     console.print(f"Skill Inspector Version: [bold green]{__version__}[/]")
     console.print(f"Use [bold]--help[/bold] for more information.")
 
-def main_cli():
+def main():
     app()
 
 if __name__ == "__main__":
-    main_cli()
+    main()
