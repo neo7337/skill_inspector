@@ -5,7 +5,7 @@ import { ScoreBar, OverallScoreRing } from './ScoreBar'
 
 const BODY_TOKEN_WARN_THRESHOLD = 5000
 
-interface LLMReportProps {
+export interface LLMReportProps {
   result: LLMValidationResult | null
   isLoading: boolean
   error: string | null
@@ -15,11 +15,11 @@ interface LLMReportProps {
   onApplyFix?: (fix: ApplyableFix, resolvedRule?: string) => void
 }
 
-const KIND_LABELS: Record<ReferencedFile['kind'], string> = {
-  reference: 'reference',
-  script: 'script',
-  asset: 'asset',
-  other: 'other',
+const KIND_LABELS: Record<ReferencedFile['kind'], { label: string; badge: string }> = {
+  reference: { label: 'Reference Doc', badge: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
+  script: { label: 'Executable Script', badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
+  asset: { label: 'Static Asset', badge: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20' },
+  other: { label: 'Auxiliary', badge: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20' },
 }
 
 function SkillTokenBreakdown({
@@ -29,57 +29,133 @@ function SkillTokenBreakdown({
   tokens?: SkillTokenEstimate
   referencedFiles?: ReferencedFile[]
 }) {
-  const bodyOverLimit = (tokens?.body ?? 0) > BODY_TOKEN_WARN_THRESHOLD
+  const bodyTokens = tokens?.body ?? 0
+  const bodyOverLimit = bodyTokens > BODY_TOKEN_WARN_THRESHOLD
+  const bodyPercent = Math.min(100, Math.round((bodyTokens / BODY_TOKEN_WARN_THRESHOLD) * 100))
   const files = referencedFiles ?? []
 
   return (
-    <div className="p-4 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 space-y-3">
+    <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 shadow-xs backdrop-blur-md space-y-4">
       {tokens && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-            Skill context cost
-          </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 italic">Approximate (~4 characters per token)</p>
-          <div className="space-y-1.5 text-sm">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-gray-600 dark:text-gray-400">Catalog (name + description)</span>
-              <span className="font-mono text-gray-900 dark:text-gray-200 shrink-0">~{tokens.catalog.toLocaleString()}</span>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                Skill Context Cost & Token Budget
+              </h3>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                Estimated at ~4 characters per token
+              </p>
             </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <span className={bodyOverLimit ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-gray-600 dark:text-gray-400'}>
-                On activation (body)
+            <span
+              className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                bodyOverLimit
+                  ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25'
+                  : bodyTokens > 3500
+                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25'
+                  : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25'
+              }`}
+            >
+              {bodyOverLimit ? 'Over Budget' : `${bodyPercent}% of 5k limit`}
+            </span>
+          </div>
+
+          {/* Progress bar comparing body token count against 5,000 threshold */}
+          <div className="space-y-1">
+            <div className="w-full h-2 rounded-full bg-slate-200/80 dark:bg-slate-800/80 overflow-hidden p-[1px] relative shadow-inner">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ease-out ${
+                  bodyOverLimit
+                    ? 'bg-gradient-to-r from-rose-500 to-red-500 shadow-[0_0_12px_rgba(244,63,94,0.35)]'
+                    : bodyTokens > 3500
+                    ? 'bg-gradient-to-r from-amber-500 to-yellow-400 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
+                    : 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_12px_rgba(16,185,129,0.35)]'
+                }`}
+                style={{ width: `${bodyPercent}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Token Breakdown Metrics */}
+          <div className="grid grid-cols-3 gap-2.5 pt-1">
+            <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-200/60 dark:border-slate-800/60">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block">
+                Catalog (Header)
               </span>
-              <span className={`font-mono shrink-0 ${bodyOverLimit ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-gray-200'}`}>
-                ~{tokens.body.toLocaleString()}
-                <span className={`ml-1.5 text-xs font-sans ${bodyOverLimit ? 'text-amber-600/80 dark:text-amber-500/80' : 'text-gray-400 dark:text-gray-600'}`}>
-                  / {BODY_TOKEN_WARN_THRESHOLD.toLocaleString()} recommended
-                </span>
+              <span className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200 mt-0.5 block">
+                ~{tokens.catalog.toLocaleString()} tokens
               </span>
             </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-gray-600 dark:text-gray-400">Full file</span>
-              <span className="font-mono text-gray-900 dark:text-gray-200 shrink-0">~{tokens.total.toLocaleString()}</span>
+
+            <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-200/60 dark:border-slate-800/60">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block">
+                On Activation (Body)
+              </span>
+              <span
+                className={`text-xs font-mono font-bold mt-0.5 block ${
+                  bodyOverLimit ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-200'
+                }`}
+              >
+                ~{tokens.body.toLocaleString()} tokens
+              </span>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-200/60 dark:border-slate-800/60">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block">
+                Total File
+              </span>
+              <span className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200 mt-0.5 block">
+                ~{tokens.total.toLocaleString()} tokens
+              </span>
             </div>
           </div>
         </div>
       )}
 
+      {/* Referenced Files Table */}
       {files.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-            Referenced files (on demand)
-          </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 italic">
-            Not included in the body token count. Loaded only if the agent reads them.
-          </p>
-          <ul className="space-y-1">
-            {files.map(file => (
-              <li key={file.path} className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="font-mono text-gray-800 dark:text-gray-200 break-all">{file.path}</span>
-                <span className="text-xs text-gray-500 shrink-0">{KIND_LABELS[file.kind]}</span>
-              </li>
-            ))}
-          </ul>
+        <div className="space-y-2 pt-2 border-t border-slate-200/80 dark:border-slate-800/80">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+              Referenced Files ({files.length})
+            </h4>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">
+              Loaded on-demand only
+            </span>
+          </div>
+
+          <div className="rounded-xl border border-slate-200/80 dark:border-slate-800/80 overflow-hidden">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-950/70 border-b border-slate-200/80 dark:border-slate-800/80 text-[11px] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
+                <tr>
+                  <th className="px-3.5 py-2">Path</th>
+                  <th className="px-3.5 py-2 text-right">Kind</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800/60 font-mono">
+                {files.map(file => {
+                  const kind = KIND_LABELS[file.kind] || KIND_LABELS.other
+                  return (
+                    <tr
+                      key={file.path}
+                      className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors"
+                    >
+                      <td className="px-3.5 py-2 text-slate-800 dark:text-slate-200 break-all">
+                        {file.path}
+                      </td>
+                      <td className="px-3.5 py-2 text-right">
+                        <span
+                          className={`inline-block text-[10px] font-sans font-semibold px-2 py-0.5 rounded-full border ${kind.badge}`}
+                        >
+                          {kind.label}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -112,22 +188,28 @@ export function LLMReport({
     setTimeout(() => setCopiedIndex(null), 1500)
   }
 
-  const tokenCard = (skillTokens || (referencedFiles && referencedFiles.length > 0))
-    ? <SkillTokenBreakdown tokens={skillTokens} referencedFiles={referencedFiles} />
-    : null
+  const tokenCard =
+    skillTokens || (referencedFiles && referencedFiles.length > 0) ? (
+      <SkillTokenBreakdown tokens={skillTokens} referencedFiles={referencedFiles} />
+    ) : null
 
   if (isLoading) {
     return (
       <div className="space-y-4">
         {tokenCard}
-        <div className="space-y-3 py-4 text-center">
-          <div className="flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400">
-            <div className="w-5 h-5 border-2 border-purple-300 dark:border-gray-600 border-t-purple-600 dark:border-t-purple-500 rounded-full animate-spin" />
-            <span className="text-sm font-medium">Consulting LLM judge…</span>
+        <div className="flex flex-col items-center justify-center py-12 px-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white/60 dark:bg-slate-900/40 backdrop-blur-md text-center space-y-3">
+          <div className="relative flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full border-2 border-violet-500/20 border-t-violet-500 animate-spin" />
+            <div className="absolute w-2 h-2 rounded-full bg-violet-500 animate-ping" />
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-500 italic">
-            This may take 10–60 seconds depending on the provider and model.
-          </p>
+          <div>
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+              Consulting LLM Judge…
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mt-0.5">
+              Evaluating instruction clarity, description triggers, and edge-cases (typically 10–45s).
+            </p>
+          </div>
         </div>
       </div>
     )
@@ -137,12 +219,18 @@ export function LLMReport({
     return (
       <div className="space-y-4">
         {tokenCard}
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
-          <div className="flex items-start gap-3">
-            <span className="text-red-500 dark:text-red-400 text-lg">✗</span>
-            <div>
-              <p className="text-sm font-semibold text-red-600 dark:text-red-300">LLM Analysis Failed</p>
-              <p className="text-sm text-red-600/80 dark:text-red-400/80 mt-1">{error}</p>
+        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 dark:bg-rose-950/30 p-5 shadow-lg backdrop-blur-sm">
+          <div className="flex items-start gap-3.5">
+            <div className="w-8 h-8 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0 font-bold">
+              ✗
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-rose-700 dark:text-rose-300">
+                LLM Analysis Execution Failed
+              </h3>
+              <p className="text-xs text-rose-800/80 dark:text-rose-300/80 mt-1 font-mono break-words">
+                {error}
+              </p>
             </div>
           </div>
         </div>
@@ -154,146 +242,211 @@ export function LLMReport({
     return (
       <div className="space-y-4">
         {tokenCard}
-        <div className="py-6 text-center space-y-2">
-          <p className="text-gray-500 dark:text-gray-500 text-sm">LLM analysis not run yet</p>
-          <p className="text-gray-400 dark:text-gray-600 text-xs">
-            Configure a provider above and click "Run LLM Analysis"
+        <div className="flex flex-col items-center justify-center py-12 px-6 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/20 text-center select-none">
+          <div className="w-12 h-12 rounded-2xl bg-violet-500/10 dark:bg-violet-500/20 border border-violet-500/20 flex items-center justify-center text-violet-500 dark:text-violet-400 mb-3 shadow-glow-sm">
+            ✨
+          </div>
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+            LLM Judge Not Executed Yet
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mt-1">
+            Configure your provider and model above, then click <strong>Run LLM Analysis</strong> to trigger the qualitative AI diagnostic.
           </p>
         </div>
       </div>
     )
   }
 
-  const dims = (Object.keys(DIMENSION_LABELS) as DimensionKey[])
+  const dims = Object.keys(DIMENSION_LABELS) as DimensionKey[]
 
   return (
     <div className="space-y-4">
       {tokenCard}
 
-      {/* Summary */}
-      <div className="flex items-center gap-4 p-4 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm dark:shadow-none">
-        <OverallScoreRing score={result.overall_score} />
-        <div className="flex-1 space-y-1">
-          <div className="flex items-center gap-2">
+      {/* Summary Card */}
+      <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 shadow-xs backdrop-blur-md flex flex-col sm:flex-row items-center gap-5">
+        <OverallScoreRing score={result.overall_score} size="md" />
+
+        <div className="flex-1 text-center sm:text-left space-y-1.5 min-w-0">
+          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
             <StatusBadge status={result.overall_status} size="md" />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">LLM Analysis</span>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+              LLM Judge Evaluation
+            </h2>
+            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20 truncate">
+              {result.provider_used} / {result.model_used}
+            </span>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-            {result.provider_used} / {result.model_used}
-          </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 italic">
-            Scores may vary ±5–10 pts between runs. Focus on the findings.
+
+          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            Evaluates qualitative prompt strength, boundaries, and phrasing clarity.
+            Scores typically vary ±5–10 points across stochastic model runs.
           </p>
         </div>
       </div>
 
-      {/* Score bars */}
-      <div className="p-4 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 space-y-3 shadow-sm dark:shadow-none">
-        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Scores</p>
-        {dims.map(dim => (
-          <ScoreBar
-            key={dim}
-            score={result[dim].score}
-            label={DIMENSION_LABELS[dim]}
-          />
-        ))}
+      {/* Dimension Score Bars Card */}
+      <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 shadow-xs backdrop-blur-md space-y-3">
+        <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+          Dimension Scores
+        </h3>
+        <div className="space-y-2.5">
+          {dims.map(dim => (
+            <ScoreBar
+              key={dim}
+              score={result[dim].score}
+              label={DIMENSION_LABELS[dim]}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Per-dimension accordion */}
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {dims.map(dim => {
           const d = result[dim]
           const isExpanded = expandedDim === dim
 
           return (
-            <div key={dim} className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/40 overflow-hidden shadow-sm dark:shadow-none">
+            <div
+              key={dim}
+              className="rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900/60 overflow-hidden shadow-xs backdrop-blur-sm transition-all duration-200"
+            >
               <button
                 type="button"
                 onClick={() => setExpandedDim(isExpanded ? null : dim)}
-                className="w-full flex items-center justify-between p-3.5 text-left hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                className="w-full flex items-center justify-between p-3.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group"
+                aria-expanded={isExpanded}
               >
-                <div className="flex items-center gap-2.5">
-                  <StatusBadge status={d.status} />
-                  <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{DIMENSION_LABELS[dim]}</span>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <StatusBadge status={d.status} size="sm" />
+                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
+                    {DIMENSION_LABELS[dim]}
+                  </span>
                 </div>
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xs font-mono text-gray-500 dark:text-gray-400">{d.score}/100</span>
-                  <span className="text-gray-400 dark:text-gray-500 text-xs">{isExpanded ? '▲' : '▼'}</span>
+
+                <div className="flex items-center gap-3 shrink-0 ml-3">
+                  <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-400">
+                    {d.score}/100
+                  </span>
+                  <svg
+                    className={`w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-transform duration-200 ${
+                      isExpanded ? 'rotate-180' : 'rotate-0'
+                    }`}
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
                 </div>
               </button>
 
               {isExpanded && (
-                <div className="border-t border-gray-200 dark:border-gray-800 p-4 space-y-4 bg-gray-50/50 dark:bg-gray-900/60">
-                  {/* Findings */}
+                <div className="border-t border-slate-200/80 dark:border-slate-800/80 p-4 space-y-4 bg-slate-50/50 dark:bg-slate-950/40">
+                  {/* Qualitative Findings List */}
                   {d.findings.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Findings</p>
-                      <ul className="space-y-2">
+                      <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Qualitative Findings
+                      </h4>
+                      <div className="space-y-2">
                         {d.findings.map((finding, i) => (
-                          <li key={i} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                            <span className="text-gray-400 dark:text-gray-600 mt-1 shrink-0">•</span>
-                            <span>{finding}</span>
-                          </li>
+                          <div
+                            key={i}
+                            className="p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-800/60 bg-white/70 dark:bg-slate-900/60 text-xs text-slate-800 dark:text-slate-200 leading-relaxed flex items-start gap-2.5"
+                          >
+                            <span className="text-slate-400 dark:text-slate-500 font-bold shrink-0 mt-0.5">
+                              •
+                            </span>
+                            <span className="flex-1">{finding}</span>
+                          </div>
                         ))}
-                      </ul>
+                      </div>
                     </div>
                   )}
 
-                  {/* Suggestions */}
+                  {/* Suggestions & Code Snippet Action Cards */}
                   {d.suggestions.length > 0 && (
                     <div className="space-y-2.5">
-                      <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-                        Suggestions & Improvements
-                      </p>
-                      <ul className="space-y-3">
+                      <h4 className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                        Recommendations & Concrete Improvements
+                      </h4>
+                      <div className="space-y-3">
                         {d.suggestions.map((sug, i) => {
-                          const suggestionText = typeof sug === 'string' ? sug : (sug?.text ?? '')
-                          const suggestionExample = typeof sug === 'object' && sug !== null ? sug.example : null
+                          const suggestionText = typeof sug === 'string' ? sug : sug?.text ?? ''
+                          const suggestionExample =
+                            typeof sug === 'object' && sug !== null ? sug.example : null
                           const itemKey = `${dim}-${i}`
+                          const isCopied = copiedIndex === itemKey
 
                           return (
-                            <li key={i} className="p-3 rounded-lg border border-blue-200/60 dark:border-blue-900/30 bg-blue-50/50 dark:bg-blue-950/20 space-y-2">
-                              <div className="flex items-start gap-2">
-                                <span className="text-blue-500 mt-0.5 shrink-0">→</span>
-                                <span className="text-sm text-gray-800 dark:text-blue-200 leading-relaxed flex-1">
-                                  {suggestionText}
+                            <div
+                              key={i}
+                              className="p-3.5 rounded-xl border border-indigo-200/60 dark:border-indigo-900/40 bg-indigo-50/40 dark:bg-indigo-950/20 space-y-2.5"
+                            >
+                              <div className="flex items-start gap-2 text-xs leading-relaxed text-slate-800 dark:text-slate-200">
+                                <span className="text-indigo-500 dark:text-indigo-400 font-bold shrink-0 mt-0.5">
+                                  💡
                                 </span>
+                                <span className="flex-1">{suggestionText}</span>
                               </div>
 
+                              {/* Code Snippet Box & Actions */}
                               {suggestionExample && (
-                                <div className="ml-5 mt-2 space-y-2">
+                                <div className="mt-2 space-y-2 pt-1 border-t border-indigo-200/50 dark:border-indigo-900/30">
                                   <div className="relative group">
-                                    <pre className="text-xs bg-gray-900 dark:bg-gray-950 text-gray-100 p-3 rounded-md font-mono overflow-x-auto border border-gray-800 whitespace-pre-wrap">
+                                    <div className="px-3 py-1 bg-slate-800 dark:bg-slate-900 text-slate-400 rounded-t-lg text-[10px] font-mono flex items-center justify-between border-b border-slate-700/60">
+                                      <span>Suggested SKILL.md Snippet</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCopy(itemKey, suggestionExample)}
+                                        className="hover:text-white transition-colors"
+                                      >
+                                        {isCopied ? '✓ Copied' : 'Copy'}
+                                      </button>
+                                    </div>
+                                    <pre className="text-xs bg-slate-900 dark:bg-slate-950 text-slate-100 p-3 rounded-b-lg font-mono overflow-x-auto scrollbar-thin border border-slate-800 whitespace-pre-wrap leading-relaxed">
                                       <code>{suggestionExample}</code>
                                     </pre>
                                   </div>
-                                  <div className="flex items-center gap-2">
+
+                                  <div className="flex flex-wrap items-center gap-2">
                                     <button
                                       type="button"
                                       onClick={() => handleCopy(itemKey, suggestionExample)}
-                                      className="text-xs px-2.5 py-1 rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium transition-colors"
+                                      className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 active:scale-95"
                                     >
-                                      {copiedIndex === itemKey ? '✓ Copied' : 'Copy Snippet'}
+                                      <span>{isCopied ? '✓' : '📋'}</span>
+                                      <span>{isCopied ? 'Copied to Clipboard' : 'Copy Snippet'}</span>
                                     </button>
+
                                     {onApplyFix && (
                                       <button
                                         type="button"
-                                        onClick={() => onApplyFix({
-                                          kind: 'body_section',
-                                          snippet: suggestionExample,
-                                        })}
-                                        className="text-xs px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors flex items-center gap-1 shadow-sm"
+                                        onClick={() =>
+                                          onApplyFix({
+                                            kind: 'body_section',
+                                            snippet: suggestionExample,
+                                          })
+                                        }
+                                        className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+                                        title="Append this section directly to the editor markdown"
                                       >
-                                        <span>+ Append to SKILL.md</span>
+                                        <span>+</span>
+                                        <span>Append to SKILL.md</span>
                                       </button>
                                     )}
                                   </div>
                                 </div>
                               )}
-                            </li>
+                            </div>
                           )
                         })}
-                      </ul>
+                      </div>
                     </div>
                   )}
                 </div>
