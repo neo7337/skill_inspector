@@ -95,9 +95,33 @@ export function OverallScoreRing({
   const tier = getScoreTier(clampedScore)
 
   const dimensions = {
-    sm: { box: 68, radius: 28, stroke: 5, text: 'text-lg', subtext: 'text-[9px]' },
-    md: { box: 88, radius: 36, stroke: 6.5, text: 'text-2xl', subtext: 'text-[10px]' },
-    lg: { box: 112, radius: 46, stroke: 8, text: 'text-3xl', subtext: 'text-xs' },
+    sm: {
+      box: 68,
+      radius: 26,
+      stroke: 5,
+      fontSize: 18,
+      subfontSize: 7.5,
+      fontY: 32,
+      subfontY: 44,
+    },
+    md: {
+      box: 88,
+      radius: 34,
+      stroke: 6,
+      fontSize: 24,
+      subfontSize: 9,
+      fontY: 41,
+      subfontY: 56,
+    },
+    lg: {
+      box: 112,
+      radius: 44,
+      stroke: 7.5,
+      fontSize: 32,
+      subfontSize: 11,
+      fontY: 52,
+      subfontY: 72,
+    },
   }[size]
 
   const circumference = 2 * Math.PI * dimensions.radius
@@ -106,65 +130,79 @@ export function OverallScoreRing({
   const gradId = `ring-grad-${tier.tier}-${size}`
 
   return (
-    <div className={`relative flex flex-col items-center justify-center shrink-0 ${className}`}>
-      {/* Subtle radial ambient glow */}
+    <div
+      style={{ width: `${dimensions.box}px`, height: `${dimensions.box}px` }}
+      className={`relative inline-flex items-center justify-center shrink-0 select-none ${className}`}
+    >
+      {/* Contained ambient glow */}
       <div
-        className="absolute inset-0 rounded-full blur-xl pointer-events-none opacity-40 transition-colors duration-700"
+        className="absolute -inset-1 rounded-full blur-md pointer-events-none opacity-30 transition-colors duration-700"
         style={{ background: tier.radialGlow }}
       />
 
-      <div className="relative" style={{ width: dimensions.box, height: dimensions.box }}>
-        <svg
-          className="w-full h-full -rotate-90 transform drop-shadow-sm"
-          viewBox={`0 0 ${dimensions.box} ${dimensions.box}`}
+      <svg
+        className="w-full h-full overflow-visible block"
+        viewBox={`0 0 ${dimensions.box} ${dimensions.box}`}
+      >
+        <defs>
+          <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={tier.strokeGradStart} />
+            <stop offset="100%" stopColor={tier.strokeGradEnd} />
+          </linearGradient>
+        </defs>
+
+        {/* Background track circle */}
+        <circle
+          cx={center}
+          cy={center}
+          r={dimensions.radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={dimensions.stroke}
+          className="text-slate-200/70 dark:text-slate-800/80 transition-colors"
+        />
+
+        {/* Animated active progress circle - rotated inside SVG vector coordinates */}
+        <circle
+          cx={center}
+          cy={center}
+          r={dimensions.radius}
+          fill="none"
+          stroke={`url(#${gradId})`}
+          strokeWidth={dimensions.stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          transform={`rotate(-90 ${center} ${center})`}
+          className="transition-all duration-1000 ease-out"
+        />
+
+        {/* Centered Score Number (scales vectorially with SVG at any zoom level) */}
+        <text
+          x={center}
+          y={dimensions.fontY}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fill="currentColor"
+          className={`font-mono font-extrabold tracking-tight transition-colors duration-300 ${tier.text}`}
+          style={{ fontSize: `${dimensions.fontSize}px` }}
         >
-          <defs>
-            <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor={tier.strokeGradStart} />
-              <stop offset="100%" stopColor={tier.strokeGradEnd} />
-            </linearGradient>
-          </defs>
+          {clampedScore}
+        </text>
 
-          {/* Background track circle */}
-          <circle
-            cx={center}
-            cy={center}
-            r={dimensions.radius}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={dimensions.stroke}
-            className="text-slate-200/70 dark:text-slate-800/80 transition-colors"
-          />
-
-          {/* Animated active progress circle */}
-          <circle
-            cx={center}
-            cy={center}
-            r={dimensions.radius}
-            fill="none"
-            stroke={`url(#${gradId})`}
-            strokeWidth={dimensions.stroke}
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            className="transition-all duration-1000 ease-out"
-          />
-        </svg>
-
-        {/* Centered Score Label */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center select-none">
-          <span
-            className={`font-mono font-extrabold tracking-tight transition-colors duration-300 leading-none ${dimensions.text} ${tier.text}`}
-          >
-            {clampedScore}
-          </span>
-          <span
-            className={`font-semibold tracking-wider uppercase text-slate-400 dark:text-slate-500 mt-0.5 ${dimensions.subtext}`}
-          >
-            {label}
-          </span>
-        </div>
-      </div>
+        {/* Centered Label Subtext (immune to HTML minimum font size thresholds) */}
+        <text
+          x={center}
+          y={dimensions.subfontY}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fill="currentColor"
+          className="font-sans font-semibold tracking-wider uppercase text-slate-400 dark:text-slate-500 transition-colors"
+          style={{ fontSize: `${dimensions.subfontSize}px` }}
+        >
+          {label}
+        </text>
+      </svg>
     </div>
   )
 }
