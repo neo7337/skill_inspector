@@ -182,22 +182,33 @@ export default function App() {
 
   useEffect(() => {
     if (!debouncedContent.trim()) {
-      setStaticResult(null)
+      abortRef.current?.abort()
+      Promise.resolve().then(() => {
+        setStaticResult(null)
+        setStaticLoading(false)
+      })
       return
     }
 
     // Cancel previous request
     abortRef.current?.abort()
-    abortRef.current = new AbortController()
+    const controller = new AbortController()
+    abortRef.current = controller
 
-    setStaticLoading(true)
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (!cancelled) setStaticLoading(true)
+    })
+
     validateStatic(debouncedContent)
       .then(result => {
-        setStaticResult(result)
-        setStaticLoading(false)
+        if (!cancelled) {
+          setStaticResult(result)
+          setStaticLoading(false)
+        }
       })
       .catch(err => {
-        if (!axios.isCancel(err)) {
+        if (!axios.isCancel(err) && !cancelled) {
           setStaticResult({
             findings: [],
             overall_status: 'fail',
@@ -208,6 +219,11 @@ export default function App() {
           setStaticLoading(false)
         }
       })
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
   }, [debouncedContent])
 
   // ── Auto-generate repair plan on content change ──────────────────────────
@@ -229,8 +245,33 @@ export default function App() {
   }, [debouncedContent])
 
   useEffect(() => {
-    fetchRepairPlan()
-  }, [fetchRepairPlan])
+    let cancelled = false
+    if (!debouncedContent.trim()) {
+      Promise.resolve().then(() => {
+        if (!cancelled) setRepairPlan(null)
+      })
+      return
+    }
+
+    Promise.resolve().then(() => {
+      if (!cancelled) setRepairLoading(true)
+    })
+
+    getRepairPlan(debouncedContent)
+      .then(plan => {
+        if (!cancelled) {
+          setRepairPlan(plan)
+          setRepairLoading(false)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setRepairLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [debouncedContent])
 
   // ── Mark LLM result stale when content changes post-run ──────────────────
 
