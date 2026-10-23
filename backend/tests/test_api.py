@@ -96,6 +96,26 @@ class TestStaticValidateEndpoint:
         rules = [f["rule"] for f in data["findings"]]
         assert "name.required" in rules
 
+    async def test_static_with_base_dir_includes_package_details(self, client: AsyncClient, tmp_path):
+        skill_dir = tmp_path / "pkg"
+        skill_dir.mkdir()
+        (skill_dir / "references").mkdir()
+        (skill_dir / "scripts").mkdir()
+        (skill_dir / "references" / "guide.md").write_text("# Guide\nSome non-empty content here.")
+        (skill_dir / "scripts" / "extract.py").write_text("print('extract')")
+
+        response = await client.post(
+            "/validate/static",
+            json={"content": SKILL_WITH_REFS, "base_dir": str(skill_dir)},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "package" in data
+        assert data["package"]["found_files_count"] == 2
+        assert data["package"]["missing_files_count"] == 0
+        assert data["package"]["tokens"]["total_on_demand_tokens"] > 0
+        assert data["package"]["tokens"]["budget_status"] == "within_budget"
+
 
 class TestLLMValidateEndpoint:
     async def test_missing_provider_returns_422(self, client: AsyncClient):
@@ -329,3 +349,59 @@ class TestLLMJudgeUnit:
         assert report.overall_status == "fail"
         assert report.overall_score == 0
         assert "Connection refused" in report.description_quality.findings[0]
+
+
+class TestSkillPackageEndpoint:
+    async def test_inspect_package_success(self, client: AsyncClient, tmp_path):
+        pkg_dir = tmp_path / "pdf-skill"
+        pkg_dir.mkdir()
+        (pkg_dir / "references").mkdir()
+        (pkg_dir / "references" / "doc.md").write_text("# PDF Spec\nDetails on extraction.")
+        (pkg_dir / "SKILL.md").write_text("""---
+name: pdf-tool
+description: Inspects PDF tools. Use when handling PDFs.
+---
+See [references/doc.md](references/doc.md).
+""")
+
+        response = await client.post("/skill/package", json={"base_dir": str(pkg_dir)})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["base_dir"] == str(pkg_dir.resolve())
+        assert data["skill_doc"]["name"] == "pdf-tool"
+        assert data["found_files_count"] == 1
+        assert data["missing_files_count"] == 0
+        assert len(data["resolved_files"]) == 1
+        assert data["resolved_files"][0]["status"] == "found"
+        assert "tokens" in data
+        assert "validation" in data
+        assert data["validation"]["score"] >= 80
+
+    async def test_inspect_package_content_override(self, client: AsyncClient, tmp_path):
+        pkg_dir = tmp_path / "override-skill"
+        pkg_dir.mkdir()
+
+        override = """---
+name: custom-override
+description: Overridden skill. Use when testing overrides.
+---
+Body content without references.
+"""
+        response = await client.post(
+            "/skill/package",
+            json={"base_dir": str(pkg_dir), "content": override},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["skill_doc"]["name"] == "custom-override"
+
+    async def test_inspect_package_not_found(self, client: AsyncClient, tmp_path):
+        response = await client.post(
+            "/skill/package",
+            json={"base_dir": str(tmp_path / "nonexistent-dir")},
+        )
+        assert response.status_code == 404
+
+    async def test_inspect_package_empty_base_dir(self, client: AsyncClient):
+        response = await client.post("/skill/package", json={"base_dir": "   "})
+        assert response.status_code == 422
