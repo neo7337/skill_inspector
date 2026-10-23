@@ -106,6 +106,11 @@ class SkillDocument(BaseModel):
         """Relative files mentioned in the body (loaded on demand, not in body tokens)."""
         return extract_file_references(self.body)
 
+    def resolve_package(self, base_dir: Any):
+        """Resolve this skill document against a base directory into a SkillPackage."""
+        from app.package import resolve_skill_package
+        return resolve_skill_package(base_dir, skill_content=self.raw)
+
 
 def parse_skill_md(content: str) -> SkillDocument:
     """
