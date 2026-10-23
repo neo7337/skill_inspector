@@ -168,3 +168,144 @@ class TestOverallScore:
         doc = parse_skill_md(content)
         report = run_static_validation(doc)
         assert report.overall_status == RuleStatus.FAIL
+
+
+class TestScriptRules:
+    def test_valid_script_extension_passes(self):
+        content = """---
+name: script-skill
+description: Tests scripts. Use when running scripts.
+---
+Run `scripts/process.py` and `scripts/deploy.sh`.
+"""
+        doc = parse_skill_md(content)
+        report = run_static_validation(doc)
+        finding = next((f for f in report.findings if f.rule == "scripts.valid-format"), None)
+        assert finding is not None
+        assert finding.status == RuleStatus.PASS
+
+    def test_invalid_script_extension_warns(self):
+        content = """---
+name: script-skill
+description: Tests scripts. Use when running scripts.
+---
+Run `scripts/do_something` to execute.
+"""
+        doc = parse_skill_md(content)
+        report = run_static_validation(doc)
+        finding = next((f for f in report.findings if f.rule == "scripts.valid-format"), None)
+        assert finding is not None
+        assert finding.status == RuleStatus.WARN
+        assert finding.fix_snippet == "scripts/do_something.py"
+
+    def test_no_scripts_referenced_skips(self):
+        content = """---
+name: no-script-skill
+description: No scripts here. Use when needed.
+---
+No scripts in this body.
+"""
+        doc = parse_skill_md(content)
+        report = run_static_validation(doc)
+        assert not any(f.rule == "scripts.valid-format" for f in report.findings)
+
+
+class TestPackageReferenceRules:
+    def test_all_references_exist_passes(self, tmp_path):
+        skill_dir = tmp_path / "my-pkg"
+        skill_dir.mkdir()
+        (skill_dir / "references").mkdir()
+        (skill_dir / "references" / "guide.md").write_text("# Guide\nSome non-empty content here.")
+
+        content = """---
+name: my-pkg
+description: Tests package resolution. Use when testing.
+---
+Check [references/guide.md](references/guide.md) for info.
+"""
+        doc = parse_skill_md(content)
+        report = run_static_validation(doc, base_dir=skill_dir)
+
+        exists_finding = next((f for f in report.findings if f.rule == "references.file-exists"), None)
+        assert exists_finding is not None
+        assert exists_finding.status == RuleStatus.PASS
+
+        not_empty_finding = next((f for f in report.findings if f.rule == "references.not-empty"), None)
+        assert not_empty_finding is not None
+        assert not_empty_finding.status == RuleStatus.PASS
+
+    def test_missing_reference_fails(self, tmp_path):
+        skill_dir = tmp_path / "missing-pkg"
+        skill_dir.mkdir()
+
+        content = """---
+name: missing-pkg
+description: Has missing file. Use when testing.
+---
+Check `references/nonexistent.md`.
+"""
+        doc = parse_skill_md(content)
+        report = run_static_validation(doc, base_dir=skill_dir)
+
+        finding = next((f for f in report.findings if f.rule == "references.file-exists"), None)
+        assert finding is not None
+        assert finding.status == RuleStatus.FAIL
+        assert "references/nonexistent.md" in finding.message
+
+    def test_path_traversal_fails(self, tmp_path):
+        skill_dir = tmp_path / "traversal-pkg"
+        skill_dir.mkdir()
+
+        content = """---
+name: traversal-pkg
+description: Has path traversal. Use when testing.
+---
+Read [outside](../../outside.txt).
+"""
+        doc = parse_skill_md(content)
+        report = run_static_validation(doc, base_dir=skill_dir)
+
+        finding = next((f for f in report.findings if f.rule == "references.path-traversal"), None)
+        assert finding is not None
+        assert finding.status == RuleStatus.FAIL
+
+    def test_empty_reference_file_warns(self, tmp_path):
+        skill_dir = tmp_path / "empty-file-pkg"
+        skill_dir.mkdir()
+        (skill_dir / "references").mkdir()
+        (skill_dir / "references" / "empty.md").write_text("")
+
+        content = """---
+name: empty-file-pkg
+description: Has empty ref. Use when testing.
+---
+See `references/empty.md`.
+"""
+        doc = parse_skill_md(content)
+        report = run_static_validation(doc, base_dir=skill_dir)
+
+        finding = next((f for f in report.findings if f.rule == "references.not-empty"), None)
+        assert finding is not None
+        assert finding.status == RuleStatus.WARN
+        assert "empty.md" in finding.message
+
+    def test_peak_token_budget_warns_when_exceeded(self, tmp_path):
+        skill_dir = tmp_path / "huge-pkg"
+        skill_dir.mkdir()
+        (skill_dir / "references").mkdir()
+        # Create a file that is ~16,000 tokens (16,000 * 4 = 64,000 chars)
+        (skill_dir / "references" / "huge.md").write_text("word " * 16000)
+
+        content = """---
+name: huge-pkg
+description: Has huge ref. Use when testing.
+---
+See `references/huge.md`.
+"""
+        doc = parse_skill_md(content)
+        report = run_static_validation(doc, base_dir=skill_dir)
+
+        finding = next((f for f in report.findings if f.rule == "references.peak-token-budget"), None)
+        assert finding is not None
+        assert finding.status == RuleStatus.WARN
+

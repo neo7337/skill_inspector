@@ -176,7 +176,8 @@ def _clean_path(raw: str) -> str | None:
         return None
     if "<" in path or ">" in path:
         return None
-    path = path.lstrip("./")
+    while path.startswith("./") or path.startswith(".\\"):
+        path = path[2:]
     return path or None
 
 

@@ -6,13 +6,18 @@ https://agentskills.io/specification
 """
 from __future__ import annotations
 
+import logging
 import re
 from enum import Enum
+from pathlib import Path
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel
 
 from app.parser import SkillDocument
+from app.package import ReferenceFileStatus, SkillPackage, PEAK_TOKEN_WARN_THRESHOLD
+
+logger = logging.getLogger(__name__)
 
 
 # ── Constants from spec ──────────────────────────────────────────────────────
@@ -494,16 +499,164 @@ def _check_unknown_fields(frontmatter: dict[str, Any]) -> list[Finding]:
     return []
 
 
+VALID_SCRIPT_EXTENSIONS = {
+    ".py", ".sh", ".bash", ".zsh", ".js", ".ts", ".mjs", ".cjs", ".rb", ".pl"
+}
+
+
+def _check_scripts(doc: SkillDocument) -> list[Finding]:
+    scripts = [
+        ref for ref in doc.referenced_files
+        if ref.kind == "script" or ref.path.replace("\\", "/").lower().startswith("scripts/")
+    ]
+    if not scripts:
+        return []
+
+    findings: list[Finding] = []
+    invalid_scripts = []
+    for s in scripts:
+        suffix = Path(s.path).suffix.lower()
+        if suffix not in VALID_SCRIPT_EXTENSIONS:
+            invalid_scripts.append(s.path)
+            findings.append(Finding(
+                dimension="Scripts",
+                rule="scripts.valid-format",
+                status=RuleStatus.WARN,
+                message=f"Script '{s.path}' has unrecognized or missing script extension (got '{suffix or 'none'}').",
+                suggestion="Use standard executable script extensions like .py, .sh, .bash, or .js.",
+                fix_kind="text_replace",
+                fix_replace_target=s.path,
+                fix_snippet=f"{s.path}.py" if not suffix else s.path,
+            ))
+
+    if not invalid_scripts:
+        findings.append(Finding(
+            dimension="Scripts",
+            rule="scripts.valid-format",
+            status=RuleStatus.PASS,
+            message=f"All {len(scripts)} referenced script(s) have recognizable script extensions.",
+            suggestion="",
+        ))
+
+    return findings
+
+
+def _check_package_references(package: SkillPackage) -> list[Finding]:
+    findings: list[Finding] = []
+    resolved = package.resolved_files
+    if not resolved:
+        return findings
+
+    # 1. Path traversal check
+    traversed = [r for r in resolved if r.status == ReferenceFileStatus.OUTSIDE_ROOT]
+    if traversed:
+        for r in traversed:
+            findings.append(Finding(
+                dimension="Security",
+                rule="references.path-traversal",
+                status=RuleStatus.FAIL,
+                message=f"Reference '{r.relative_path}' attempts to traverse outside the skill base directory.",
+                suggestion="Keep all referenced files within the skill root directory or subdirectories.",
+            ))
+    else:
+        findings.append(Finding(
+            dimension="Security",
+            rule="references.path-traversal",
+            status=RuleStatus.PASS,
+            message="All referenced files reside safely within the skill base directory.",
+            suggestion="",
+        ))
+
+    # 2. File exists check
+    missing = [r for r in resolved if r.status == ReferenceFileStatus.MISSING]
+    if missing:
+        for r in missing:
+            findings.append(Finding(
+                dimension="References",
+                rule="references.file-exists",
+                status=RuleStatus.FAIL,
+                message=f"Referenced file does not exist: '{r.relative_path}'.",
+                suggestion=f"Create '{r.relative_path}' or update the reference in SKILL.md to point to an existing file.",
+                fix_kind="text_replace",
+                fix_replace_target=r.relative_path,
+                fix_snippet=r.relative_path,
+            ))
+    else:
+        findings.append(Finding(
+            dimension="References",
+            rule="references.file-exists",
+            status=RuleStatus.PASS,
+            message=f"All {len(resolved)} referenced file(s) exist on disk.",
+            suggestion="",
+        ))
+
+    # 3. Not empty check
+    found = [r for r in resolved if r.status == ReferenceFileStatus.FOUND]
+    empty = [r for r in found if r.size_bytes == 0]
+    if empty:
+        for r in empty:
+            findings.append(Finding(
+                dimension="References",
+                rule="references.not-empty",
+                status=RuleStatus.WARN,
+                message=f"Referenced file '{r.relative_path}' is empty (0 bytes).",
+                suggestion=f"Populate '{r.relative_path}' with instructions or data, or remove the reference.",
+            ))
+    elif found:
+        findings.append(Finding(
+            dimension="References",
+            rule="references.not-empty",
+            status=RuleStatus.PASS,
+            message="All found referenced files contain non-empty content.",
+            suggestion="",
+        ))
+
+    # 4. Peak token budget check
+    peak = package.tokens.peak_context_footprint
+    if peak > PEAK_TOKEN_WARN_THRESHOLD:
+        findings.append(Finding(
+            dimension="Context",
+            rule="references.peak-token-budget",
+            status=RuleStatus.WARN,
+            message=f"Peak context footprint is ~{peak:,} tokens, exceeding the recommended {PEAK_TOKEN_WARN_THRESHOLD:,} token limit.",
+            suggestion="Split reference documentation into focused files or trim instructions to prevent agent context window saturation.",
+        ))
+    else:
+        findings.append(Finding(
+            dimension="Context",
+            rule="references.peak-token-budget",
+            status=RuleStatus.PASS,
+            message=f"Peak context footprint is ~{peak:,} tokens (within {PEAK_TOKEN_WARN_THRESHOLD:,} token budget).",
+            suggestion="",
+        ))
+
+    return findings
+
+
 # ── Main entry point ──────────────────────────────────────────────────────────
 
-def run_static_validation(doc: SkillDocument) -> StaticValidationReport:
+def run_static_validation(
+    doc: SkillDocument,
+    base_dir: Optional[str | Path] = None,
+    package: Optional[SkillPackage] = None,
+) -> StaticValidationReport:
     """
     Run all agentskills.io spec validation rules against a parsed SkillDocument.
+
+    If base_dir or package is provided, also validates package file integrity,
+    path traversal safety, and peak context token economy.
 
     Returns a StaticValidationReport with individual findings, overall status,
     and a 0-100 score.
     """
     findings: list[Finding] = []
+
+    if package is None and base_dir is not None:
+        try:
+            from app.package import resolve_skill_package
+            package = resolve_skill_package(base_dir, skill_content=doc.raw)
+        except Exception as exc:
+            logger.warning("Failed to resolve package for static validation: %s", exc)
 
     findings.extend(_check_name(doc.name))
     findings.extend(_check_description(doc.description))
@@ -512,6 +665,10 @@ def run_static_validation(doc: SkillDocument) -> StaticValidationReport:
     findings.extend(_check_allowed_tools(doc.allowed_tools))
     findings.extend(_check_body(doc))
     findings.extend(_check_unknown_fields(doc.frontmatter))
+    findings.extend(_check_scripts(doc))
+
+    if package is not None:
+        findings.extend(_check_package_references(package))
 
     # Overall status: fail if any failures, warn if any warnings, else pass
     has_fail = any(f.status == RuleStatus.FAIL for f in findings)
@@ -534,3 +691,4 @@ def run_static_validation(doc: SkillDocument) -> StaticValidationReport:
         overall_status=overall_status,
         score=score,
     )
+
