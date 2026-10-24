@@ -384,6 +384,7 @@ def profile_trajectory(request: TrajectoryProfileRequest):
             request.trace,
             skill_content=request.skill_content,
             custom_baseline_steps=request.baseline_steps,
+            base_dir=request.base_dir,
         )
         return report.model_dump()
     except Exception as exc:

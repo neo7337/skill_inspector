@@ -217,15 +217,25 @@ def fix_command(
 @app.command("profile")
 def profile_command(
     trace_file: Path = typer.Argument(..., help="Path to trajectory trace JSON or JSONL", exists=True),
-    skill_file: Optional[Path] = typer.Option(None, "--skill", help="Path to SKILL.md content for bloat analysis"),
+    skill_file: Optional[Path] = typer.Option(None, "--skill", "-s", help="Path to SKILL.md content for bloat analysis"),
     baseline: Optional[int] = typer.Option(None, "--baseline", "-b", help="Expected optimal step budget"),
+    base_dir: Optional[Path] = typer.Option(None, "--base-dir", "-d", help="Path to skill package root directory"),
 ):
     """Profile agent execution path against baselines, flagging redundancy and token bloat."""
     trace_raw = trace_file.read_text(encoding="utf-8")
     skill_content = skill_file.read_text(encoding="utf-8") if skill_file else None
 
+    resolved_base_dir = base_dir
+    if resolved_base_dir is None and skill_file is not None:
+        resolved_base_dir = skill_file.parent.resolve()
+
     profiler = TrajectoryProfiler()
-    report = profiler.profile(trace_raw, skill_content=skill_content, custom_baseline_steps=baseline)
+    report = profiler.profile(
+        trace_raw,
+        skill_content=skill_content,
+        custom_baseline_steps=baseline,
+        base_dir=str(resolved_base_dir) if resolved_base_dir else None,
+    )
 
     color = "green" if report.status == "pass" else "yellow" if report.status == "warn" else "red"
 
@@ -255,6 +265,30 @@ def profile_command(
     )
     console.print(metrics_table)
 
+    if report.reference_audit:
+        audit = report.reference_audit
+        ref_table = Table(title="Package Reference Access Audit")
+        ref_table.add_column("Metric", style="cyan")
+        ref_table.add_column("Value", justify="right")
+        ref_table.add_column("Details")
+
+        ref_table.add_row(
+            "Reference Coverage",
+            f"{audit.coverage_pct}%",
+            f"{len(audit.referenced_files_accessed)}/{len(audit.declared_references)} declared references accessed",
+        )
+        ref_table.add_row(
+            "Undeclared File Accesses",
+            str(len(audit.undeclared_accesses)),
+            ", ".join(audit.undeclared_accesses) if audit.undeclared_accesses else "None (clean)",
+        )
+        ref_table.add_row(
+            "Redundant Reference Reads",
+            str(len(audit.redundant_reference_reads)),
+            ", ".join(audit.redundant_reference_reads) if audit.redundant_reference_reads else "0 clean",
+        )
+        console.print(ref_table)
+
     if report.redundancies:
         console.print("\n[bold red]Redundant Tool Patterns Detected:[/]")
         for idx, red in enumerate(report.redundancies, 1):
@@ -262,6 +296,7 @@ def profile_command(
             console.print(f"\n  [bold {sev_color}]{idx}. [{red.kind.upper()}] {red.title} (Steps: {red.step_indices})[/]")
             console.print(f"     [dim]{red.detail}[/]")
             console.print(f"     [bold green]→ Skill Fix Advice:[/] {red.suggested_skill_fix}")
+
 
 
 @app.command("generate-tests")

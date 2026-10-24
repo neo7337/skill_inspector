@@ -79,3 +79,39 @@ class TestProfilerEndpoint:
         data = response.json()
         assert data["task_id"] == "test_endpoint"
         assert len(data["redundancies"]) >= 1
+
+    async def test_profiler_trajectory_with_base_dir_and_reference_audit(self, client: AsyncClient, tmp_path):
+        skill_content = """---
+name: doc-skill
+description: Skill description.
+---
+# Instructions
+Check [guide](docs/guide.md) and execute `scripts/run.sh`.
+"""
+        skill_file = tmp_path / "SKILL.md"
+        skill_file.write_text(skill_content)
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "docs" / "guide.md").write_text("# Guide")
+
+        trace = {
+            "task_id": "test_pkg_ref",
+            "skill_name": "doc-skill",
+            "tool_calls": [
+                {"step_index": 1, "tool_name": "view_file", "tool_arguments": {"AbsolutePath": str(tmp_path / "docs" / "guide.md")}},
+                {"step_index": 2, "tool_name": "view_file", "tool_arguments": {"path": "untracked.txt"}},
+            ],
+        }
+        response = await client.post("/profiler/trajectory", json={
+            "trace": trace,
+            "base_dir": str(tmp_path),
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert "reference_audit" in data
+        assert data["reference_audit"] is not None
+        audit = data["reference_audit"]
+        assert "docs/guide.md" in audit["referenced_files_accessed"]
+        assert "untracked.txt" in audit["undeclared_accesses"]
+        assert audit["coverage_ratio"] == 0.5
+        assert audit["coverage_pct"] == 50.0
+

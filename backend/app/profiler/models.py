@@ -34,6 +34,8 @@ RedundancyKind = Literal[
     "error_ping_pong",
     "no_op_mutation",
     "duplicate_tool_call",
+    "undeclared_file_access",
+    "redundant_reference_read",
 ]
 
 
@@ -63,6 +65,18 @@ class TokenEfficiencyAnalysis(BaseModel):
     message: str
 
 
+class ReferenceAccessAudit(BaseModel):
+    declared_references: list[str] = Field(default_factory=list)
+    accessed_files: list[str] = Field(default_factory=list)
+    referenced_files_accessed: list[str] = Field(default_factory=list)
+    unaccessed_references: list[str] = Field(default_factory=list)
+    undeclared_accesses: list[str] = Field(default_factory=list)
+    coverage_ratio: float = 1.0  # 0.0 - 1.0
+    coverage_pct: float = 100.0  # 0.0 - 100.0
+    redundant_reference_reads: list[str] = Field(default_factory=list)
+    summary: str = ""
+
+
 class TrajectoryProfileReport(BaseModel):
     task_id: str
     skill_name: str
@@ -72,3 +86,5 @@ class TrajectoryProfileReport(BaseModel):
     token_efficiency: TokenEfficiencyAnalysis
     redundancies: list[RedundantCallFinding]
     timeline_summary: list[dict[str, Any]]
+    reference_audit: ReferenceAccessAudit | None = None
+

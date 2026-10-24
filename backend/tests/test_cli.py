@@ -50,3 +50,34 @@ Run `scripts/run.py`.
     assert result.exit_code == 0
     assert "scripts/run.py" in result.stdout
     assert "FOUND" in result.stdout
+
+
+def test_cli_profile_with_reference_audit(tmp_path: Path):
+    import json
+    skill_dir = tmp_path / "profile-skill"
+    skill_dir.mkdir()
+    (skill_dir / "docs").mkdir()
+    (skill_dir / "docs" / "guide.md").write_text("# Guide Content")
+    skill_file = skill_dir / "SKILL.md"
+    skill_file.write_text("""---
+name: profile-skill
+description: Profile test skill. Use when profiling.
+---
+See [docs/guide.md](docs/guide.md).
+""")
+    trace_file = tmp_path / "trace.json"
+    trace_data = {
+        "task_id": "cli_profile_test",
+        "tool_calls": [
+            {"step_index": 1, "tool_name": "view_file", "tool_arguments": {"path": "docs/guide.md"}},
+            {"step_index": 2, "tool_name": "read_file", "tool_arguments": {"path": "unlisted.txt"}},
+        ],
+    }
+    trace_file.write_text(json.dumps(trace_data))
+
+    result = runner.invoke(app, ["profile", str(trace_file), "--skill", str(skill_file)])
+    assert result.exit_code == 0
+    assert "Package Reference Access Audit" in result.stdout
+    assert "Reference Coverage" in result.stdout
+    assert "Undeclared File Accesses" in result.stdout
+
