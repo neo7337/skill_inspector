@@ -1,9 +1,15 @@
 import { useState } from 'react'
-import type { LLMValidationResult, ReferencedFile, SkillTokenEstimate, ApplyableFix } from '../types'
+import type {
+  LLMValidationResult,
+  ReferencedFile,
+  SkillTokenEstimate,
+  ApplyableFix,
+  SkillPackageSummary,
+  ResolvedFileReference,
+} from '../types'
 import { StatusBadge } from './StatusBadge'
 import { ScoreBar, OverallScoreRing } from './ScoreBar'
-
-const BODY_TOKEN_WARN_THRESHOLD = 5000
+import { SkillTokenBreakdown } from './SkillTokenBreakdown'
 
 export interface LLMReportProps {
   result: LLMValidationResult | null
@@ -11,156 +17,12 @@ export interface LLMReportProps {
   error: string | null
   skillTokens?: SkillTokenEstimate
   referencedFiles?: ReferencedFile[]
+  packageSummary?: SkillPackageSummary | null
+  onSelectFile?: (file: ResolvedFileReference | ReferencedFile) => void
   isDark?: boolean
   onApplyFix?: (fix: ApplyableFix, resolvedRule?: string) => void
 }
 
-const KIND_LABELS: Record<ReferencedFile['kind'], { label: string; badge: string }> = {
-  reference: { label: 'Reference Doc', badge: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
-  script: { label: 'Executable Script', badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
-  asset: { label: 'Static Asset', badge: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20' },
-  other: { label: 'Auxiliary', badge: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20' },
-}
-
-function SkillTokenBreakdown({
-  tokens,
-  referencedFiles,
-}: {
-  tokens?: SkillTokenEstimate
-  referencedFiles?: ReferencedFile[]
-}) {
-  const bodyTokens = tokens?.body ?? 0
-  const bodyOverLimit = bodyTokens > BODY_TOKEN_WARN_THRESHOLD
-  const bodyPercent = Math.min(100, Math.round((bodyTokens / BODY_TOKEN_WARN_THRESHOLD) * 100))
-  const files = referencedFiles ?? []
-
-  return (
-    <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 shadow-xs backdrop-blur-md space-y-4">
-      {tokens && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-                Skill Context Cost & Token Budget
-              </h3>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                Estimated at ~4 characters per token
-              </p>
-            </div>
-            <span
-              className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full border ${
-                bodyOverLimit
-                  ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25'
-                  : bodyTokens > 3500
-                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25'
-                  : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25'
-              }`}
-            >
-              {bodyOverLimit ? 'Over Budget' : `${bodyPercent}% of 5k limit`}
-            </span>
-          </div>
-
-          {/* Progress bar comparing body token count against 5,000 threshold */}
-          <div className="space-y-1">
-            <div className="w-full h-2 rounded-full bg-slate-200/80 dark:bg-slate-800/80 overflow-hidden p-[1px] relative shadow-inner">
-              <div
-                className={`h-full rounded-full transition-all duration-700 ease-out ${
-                  bodyOverLimit
-                    ? 'bg-gradient-to-r from-rose-500 to-red-500 shadow-[0_0_12px_rgba(244,63,94,0.35)]'
-                    : bodyTokens > 3500
-                    ? 'bg-gradient-to-r from-amber-500 to-yellow-400 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
-                    : 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_12px_rgba(16,185,129,0.35)]'
-                }`}
-                style={{ width: `${bodyPercent}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Token Breakdown Metrics */}
-          <div className="grid grid-cols-3 gap-2.5 pt-1">
-            <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-200/60 dark:border-slate-800/60">
-              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block">
-                Catalog (Header)
-              </span>
-              <span className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200 mt-0.5 block">
-                ~{tokens.catalog.toLocaleString()} tokens
-              </span>
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-200/60 dark:border-slate-800/60">
-              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block">
-                On Activation (Body)
-              </span>
-              <span
-                className={`text-xs font-mono font-bold mt-0.5 block ${
-                  bodyOverLimit ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-200'
-                }`}
-              >
-                ~{tokens.body.toLocaleString()} tokens
-              </span>
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-200/60 dark:border-slate-800/60">
-              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block">
-                Total File
-              </span>
-              <span className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200 mt-0.5 block">
-                ~{tokens.total.toLocaleString()} tokens
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Referenced Files Table */}
-      {files.length > 0 && (
-        <div className="space-y-2 pt-2 border-t border-slate-200/80 dark:border-slate-800/80">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-              Referenced Files ({files.length})
-            </h4>
-            <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">
-              Loaded on-demand only
-            </span>
-          </div>
-
-          <div className="rounded-xl border border-slate-200/80 dark:border-slate-800/80 overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-950/70 border-b border-slate-200/80 dark:border-slate-800/80 text-[11px] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
-                <tr>
-                  <th className="px-3.5 py-2">Path</th>
-                  <th className="px-3.5 py-2 text-right">Kind</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800/60 font-mono">
-                {files.map(file => {
-                  const kind = KIND_LABELS[file.kind] || KIND_LABELS.other
-                  return (
-                    <tr
-                      key={file.path}
-                      className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors"
-                    >
-                      <td className="px-3.5 py-2 text-slate-800 dark:text-slate-200 break-all">
-                        {file.path}
-                      </td>
-                      <td className="px-3.5 py-2 text-right">
-                        <span
-                          className={`inline-block text-[10px] font-sans font-semibold px-2 py-0.5 rounded-full border ${kind.badge}`}
-                        >
-                          {kind.label}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
 
 const DIMENSION_LABELS = {
   description_quality: 'Description Quality',
@@ -177,6 +39,8 @@ export function LLMReport({
   error,
   skillTokens,
   referencedFiles,
+  packageSummary,
+  onSelectFile,
   onApplyFix,
 }: LLMReportProps) {
   const [expandedDim, setExpandedDim] = useState<DimensionKey | null>(null)
@@ -188,9 +52,15 @@ export function LLMReport({
     setTimeout(() => setCopiedIndex(null), 1500)
   }
 
+  const pkg = packageSummary ?? result?.package
   const tokenCard =
-    skillTokens || (referencedFiles && referencedFiles.length > 0) ? (
-      <SkillTokenBreakdown tokens={skillTokens} referencedFiles={referencedFiles} />
+    skillTokens || (referencedFiles && referencedFiles.length > 0) || pkg ? (
+      <SkillTokenBreakdown
+        tokens={skillTokens}
+        referencedFiles={referencedFiles}
+        packageSummary={pkg}
+        onSelectFile={onSelectFile}
+      />
     ) : null
 
   if (isLoading) {

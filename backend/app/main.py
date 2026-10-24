@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.parser import ParseError, parse_skill_md
+from app.package import resolve_skill_package, SkillPackage
 from app.validators.static import run_static_validation
 from app.validators.llm_judge import ProviderConfig, run_llm_validation
 from app.repair import DeterministicRepairEngine, LLMRepairEngine
@@ -39,6 +40,7 @@ app.add_middleware(
 
 class StaticValidateRequest(BaseModel):
     content: str
+    base_dir: str | None = None
 
 
 class LLMValidateRequest(BaseModel):
@@ -47,6 +49,13 @@ class LLMValidateRequest(BaseModel):
     model: str
     api_key: str | None = None
     base_url: str | None = None
+    base_dir: str | None = None
+    include_references: bool = False
+
+
+class PackageInspectRequest(BaseModel):
+    base_dir: str
+    content: str | None = None
 
 
 class ParseErrorResponse(BaseModel):
@@ -89,6 +98,7 @@ class TrajectoryProfileRequest(BaseModel):
     trace: Any  # JSON object, list of tool calls, or JSONL string
     skill_content: str | None = None
     baseline_steps: int | None = None
+    base_dir: str | None = None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -98,11 +108,57 @@ def health_check():
     return {"status": "ok", "service": "skill-validator"}
 
 
+@app.post("/skill/package")
+def inspect_package(request: PackageInspectRequest):
+    """
+    Inspect, discover, and resolve a skill package from a base directory.
+    Audits all referenced files, calculates multi-tier context economy,
+    and runs static validation.
+    """
+    if not request.base_dir or not request.base_dir.strip():
+        raise HTTPException(status_code=422, detail="base_dir must not be empty.")
+
+    try:
+        pkg = resolve_skill_package(request.base_dir, skill_content=request.content)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except NotADirectoryError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except ParseError as exc:
+        raise HTTPException(status_code=422, detail=f"Parse error: {exc.message}")
+    except Exception as exc:
+        logger.exception("Failed to inspect skill package: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    report = run_static_validation(pkg.skill_doc, package=pkg)
+
+    return {
+        "base_dir": pkg.base_dir,
+        "skill_doc": {
+            "name": pkg.skill_doc.name,
+            "description": pkg.skill_doc.description,
+            "frontmatter": pkg.skill_doc.frontmatter,
+            "body": pkg.skill_doc.body,
+            "raw": pkg.skill_doc.raw,
+        },
+        "resolved_files": [r.model_dump() for r in pkg.resolved_files],
+        "tokens": pkg.tokens.model_dump(),
+        "missing_files_count": pkg.missing_files_count,
+        "found_files_count": pkg.found_files_count,
+        "validation": {
+            "findings": [f.model_dump() for f in report.findings],
+            "overall_status": report.overall_status.value,
+            "score": report.score,
+        },
+    }
+
+
 @app.post("/validate/static")
 def validate_static(request: StaticValidateRequest):
     """
     Run static structural validation on SKILL.md content.
     Returns a ValidationReport with findings, status, and score.
+    If base_dir is provided, also validates package file integrity and token budget.
     """
     if not request.content or not request.content.strip():
         raise HTTPException(status_code=422, detail="Content must not be empty.")
@@ -118,14 +174,30 @@ def validate_static(request: StaticValidateRequest):
             "score": 0,
         }
 
-    report = run_static_validation(doc)
-    return {
+    pkg = None
+    if request.base_dir:
+        try:
+            pkg = resolve_skill_package(request.base_dir, skill_content=request.content)
+        except Exception as exc:
+            logger.warning("Failed to resolve package in /validate/static: %s", exc)
+
+    report = run_static_validation(doc, base_dir=request.base_dir, package=pkg)
+    response_data: dict[str, Any] = {
         "findings": [f.model_dump() for f in report.findings],
         "overall_status": report.overall_status.value,
         "score": report.score,
         "skill_tokens": doc.token_estimate,
         "referenced_files": [ref.model_dump() for ref in doc.referenced_files],
     }
+    if pkg is not None:
+        response_data["package"] = {
+            "base_dir": pkg.base_dir,
+            "resolved_files": [r.model_dump() for r in pkg.resolved_files],
+            "tokens": pkg.tokens.model_dump(),
+            "missing_files_count": pkg.missing_files_count,
+            "found_files_count": pkg.found_files_count,
+        }
+    return response_data
 
 
 @app.post("/validate/llm")
@@ -165,9 +237,10 @@ async def validate_llm(request: LLMValidateRequest):
         model=request.model.strip(),
         api_key=request.api_key or None,
         base_url=request.base_url or None,
+        include_references=request.include_references,
     )
 
-    report = await run_llm_validation(doc, config)
+    report = await run_llm_validation(doc, config, base_dir=request.base_dir)
     logger.info(
         "POST /validate/llm done provider=%s model=%s overall_status=%s overall_score=%s",
         report.provider_used,
@@ -175,7 +248,16 @@ async def validate_llm(request: LLMValidateRequest):
         report.overall_status,
         report.overall_score,
     )
-    return report.model_dump()
+    result = report.model_dump()
+    if request.base_dir and report.package_tokens is not None:
+        result["package"] = {
+            "base_dir": request.base_dir,
+            "resolved_files": [r.model_dump() for r in report.resolved_files],
+            "tokens": report.package_tokens.model_dump(),
+            "missing_files_count": sum(1 for r in report.resolved_files if r.status == "missing"),
+            "found_files_count": sum(1 for r in report.resolved_files if r.status == "found"),
+        }
+    return result
 
 
 # ── Repair Endpoints ──────────────────────────────────────────────────────────
@@ -302,6 +384,7 @@ def profile_trajectory(request: TrajectoryProfileRequest):
             request.trace,
             skill_content=request.skill_content,
             custom_baseline_steps=request.baseline_steps,
+            base_dir=request.base_dir,
         )
         return report.model_dump()
     except Exception as exc:

@@ -16,6 +16,7 @@ from rich.syntax import Syntax
 import asyncio
 
 from app.parser import parse_skill_md, ParseError
+from app.package import resolve_skill_package, ReferenceFileStatus, SkillPackage
 from app.validators.static import run_static_validation
 from app.validators.llm_judge import ProviderConfig, run_llm_validation
 from app.repair import DeterministicRepairEngine, LLMRepairEngine
@@ -47,6 +48,9 @@ def root_callback(
 @app.command("validate")
 def validate_command(
     file: Path = typer.Argument(..., help="Path to SKILL.md file", exists=True),
+    base_dir: Optional[Path] = typer.Option(
+        None, "--base-dir", "-d", help="Base directory of the skill package (defaults to parent folder of SKILL.md)"
+    ),
     llm: bool = typer.Option(False, "--llm", help="Also run LLM-as-a-Judge validation"),
     provider: str = typer.Option("openai", "--provider", help="LLM provider (openai, anthropic, ollama)"),
     model: str = typer.Option("gpt-4o", "--model", help="LLM model name"),
@@ -62,7 +66,15 @@ def validate_command(
         console.print(f"[bold red]Parse Error:[/] {exc.message}")
         raise typer.Exit(code=1)
 
-    static_report = run_static_validation(doc)
+    resolved_base = (base_dir or file.parent).resolve()
+    pkg: Optional[SkillPackage] = None
+    if resolved_base.is_dir():
+        try:
+            pkg = resolve_skill_package(resolved_base, skill_content=content)
+        except Exception as exc:
+            console.print(f"[bold yellow]Warning:[/] Could not resolve package in {resolved_base}: {exc}")
+
+    static_report = run_static_validation(doc, base_dir=resolved_base, package=pkg)
 
     # Render static table
     table = Table(title=f"Static Validation (Score: {static_report.score}/100 - {static_report.overall_status.value.upper()})")
@@ -75,6 +87,59 @@ def validate_command(
         table.add_row(f.rule, f"[{color}]{f.status.value.upper()}[/{color}]", f.message)
 
     console.print(table)
+
+    # Render package references & token economy
+    if pkg is not None and pkg.resolved_files:
+        ref_table = Table(title=f"Referenced Files & Package Integrity ({pkg.found_files_count} found, {pkg.missing_files_count} missing)")
+        ref_table.add_column("Referenced File", style="cyan")
+        ref_table.add_column("Kind")
+        ref_table.add_column("Status", style="bold")
+        ref_table.add_column("Size", justify="right")
+        ref_table.add_column("Tokens", justify="right")
+
+        for ref in pkg.resolved_files:
+            if ref.status == ReferenceFileStatus.FOUND:
+                status_text = "[green]FOUND[/]"
+                size_text = f"{ref.size_bytes / 1024:.1f} KB" if ref.size_bytes >= 1024 else f"{ref.size_bytes} B"
+                tokens_text = f"~{ref.token_count:,}"
+            elif ref.status == ReferenceFileStatus.MISSING:
+                status_text = "[red]MISSING[/]"
+                size_text = "—"
+                tokens_text = "—"
+            elif ref.status == ReferenceFileStatus.OUTSIDE_ROOT:
+                status_text = "[red]OUTSIDE ROOT[/]"
+                size_text = "—"
+                tokens_text = "—"
+            else:
+                status_text = "[yellow]UNREADABLE[/]"
+                size_text = "—"
+                tokens_text = "—"
+
+            ref_table.add_row(ref.relative_path, ref.kind.upper(), status_text, size_text, tokens_text)
+
+        console.print(ref_table)
+
+        budget_color = (
+            "green" if pkg.tokens.budget_status == "within_budget"
+            else "yellow" if pkg.tokens.budget_status == "caution"
+            else "red"
+        )
+        summary_text = (
+            f"[bold]Inactive Catalog:[/] ~{pkg.tokens.catalog_tokens:,} tokens  |  "
+            f"[bold]Active Body:[/] ~{pkg.tokens.activation_tokens:,} tokens  |  "
+            f"[bold]On-Demand References:[/] ~{pkg.tokens.total_on_demand_tokens:,} tokens\n"
+            f"[bold]Peak Context Footprint:[/] [{budget_color}]~{pkg.tokens.peak_context_footprint:,} tokens "
+            f"({pkg.tokens.budget_status.replace('_', ' ').upper()})[/{budget_color}]"
+        )
+        console.print(Panel(summary_text, title="Context & Token Economy Footprint", border_style="cyan"))
+    else:
+        est = doc.token_estimate
+        summary_text = (
+            f"[bold]Catalog:[/] ~{est['catalog']:,} tokens  |  "
+            f"[bold]Active Body:[/] ~{est['body']:,} tokens  |  "
+            f"[bold]Total File:[/] ~{est['total']:,} tokens"
+        )
+        console.print(Panel(summary_text, title="Skill Token Estimate", border_style="cyan"))
 
     if llm:
         console.print(f"\n[bold cyan]Running LLM Judge ({provider}:{model})...[/]")
@@ -152,15 +217,25 @@ def fix_command(
 @app.command("profile")
 def profile_command(
     trace_file: Path = typer.Argument(..., help="Path to trajectory trace JSON or JSONL", exists=True),
-    skill_file: Optional[Path] = typer.Option(None, "--skill", help="Path to SKILL.md content for bloat analysis"),
+    skill_file: Optional[Path] = typer.Option(None, "--skill", "-s", help="Path to SKILL.md content for bloat analysis"),
     baseline: Optional[int] = typer.Option(None, "--baseline", "-b", help="Expected optimal step budget"),
+    base_dir: Optional[Path] = typer.Option(None, "--base-dir", "-d", help="Path to skill package root directory"),
 ):
     """Profile agent execution path against baselines, flagging redundancy and token bloat."""
     trace_raw = trace_file.read_text(encoding="utf-8")
     skill_content = skill_file.read_text(encoding="utf-8") if skill_file else None
 
+    resolved_base_dir = base_dir
+    if resolved_base_dir is None and skill_file is not None:
+        resolved_base_dir = skill_file.parent.resolve()
+
     profiler = TrajectoryProfiler()
-    report = profiler.profile(trace_raw, skill_content=skill_content, custom_baseline_steps=baseline)
+    report = profiler.profile(
+        trace_raw,
+        skill_content=skill_content,
+        custom_baseline_steps=baseline,
+        base_dir=str(resolved_base_dir) if resolved_base_dir else None,
+    )
 
     color = "green" if report.status == "pass" else "yellow" if report.status == "warn" else "red"
 
@@ -190,6 +265,30 @@ def profile_command(
     )
     console.print(metrics_table)
 
+    if report.reference_audit:
+        audit = report.reference_audit
+        ref_table = Table(title="Package Reference Access Audit")
+        ref_table.add_column("Metric", style="cyan")
+        ref_table.add_column("Value", justify="right")
+        ref_table.add_column("Details")
+
+        ref_table.add_row(
+            "Reference Coverage",
+            f"{audit.coverage_pct}%",
+            f"{len(audit.referenced_files_accessed)}/{len(audit.declared_references)} declared references accessed",
+        )
+        ref_table.add_row(
+            "Undeclared File Accesses",
+            str(len(audit.undeclared_accesses)),
+            ", ".join(audit.undeclared_accesses) if audit.undeclared_accesses else "None (clean)",
+        )
+        ref_table.add_row(
+            "Redundant Reference Reads",
+            str(len(audit.redundant_reference_reads)),
+            ", ".join(audit.redundant_reference_reads) if audit.redundant_reference_reads else "0 clean",
+        )
+        console.print(ref_table)
+
     if report.redundancies:
         console.print("\n[bold red]Redundant Tool Patterns Detected:[/]")
         for idx, red in enumerate(report.redundancies, 1):
@@ -197,6 +296,7 @@ def profile_command(
             console.print(f"\n  [bold {sev_color}]{idx}. [{red.kind.upper()}] {red.title} (Steps: {red.step_indices})[/]")
             console.print(f"     [dim]{red.detail}[/]")
             console.print(f"     [bold green]→ Skill Fix Advice:[/] {red.suggested_skill_fix}")
+
 
 
 @app.command("generate-tests")

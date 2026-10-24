@@ -30,12 +30,51 @@ export interface ReferencedFile {
   kind: ReferencedFileKind
 }
 
+export type ReferenceFileStatus = 'found' | 'missing' | 'unreadable' | 'outside_root'
+
+export interface ResolvedFileReference {
+  relative_path: string
+  kind: ReferencedFileKind | string
+  status: ReferenceFileStatus
+  absolute_path?: string | null
+  size_bytes: number
+  line_count: number
+  token_count: number
+  is_binary: boolean
+  content_preview?: string | null
+  error_message?: string | null
+}
+
+export type BudgetStatus = 'within_budget' | 'approaching_limit' | 'exceeds_budget'
+
+export interface PackageTokenEconomy {
+  catalog_tokens: number
+  activation_tokens: number
+  on_demand_tokens_by_file: Record<string, number>
+  total_on_demand_tokens: number
+  peak_context_footprint: number
+  budget_status: BudgetStatus
+}
+
+export interface SkillPackageSummary {
+  base_dir: string
+  resolved_files: ResolvedFileReference[]
+  tokens: PackageTokenEconomy
+  missing_files_count: number
+  found_files_count: number
+  skill_content?: string
+  skill_tokens?: SkillTokenEstimate
+}
+
+export type SkillPackageInspectionResult = SkillPackageSummary
+
 export interface StaticValidationResult {
   findings: StaticFinding[]
   overall_status: RuleStatus
   score: number
   skill_tokens?: SkillTokenEstimate
   referenced_files?: ReferencedFile[]
+  package?: SkillPackageSummary
   // Present when SKILL.md couldn't be parsed
   error?: string
   type?: 'parse_error'
@@ -65,6 +104,9 @@ export interface LLMValidationResult {
   provider_used: string
   skill_tokens?: SkillTokenEstimate
   referenced_files?: ReferencedFile[]
+  package?: SkillPackageSummary
+  package_tokens?: PackageTokenEconomy
+  resolved_files?: ResolvedFileReference[]
 }
 
 export type LLMProvider = 'openai' | 'anthropic' | 'ollama'
@@ -74,6 +116,7 @@ export interface ProviderConfig {
   model: string
   api_key: string
   base_url: string
+  include_references?: boolean
 }
 
 export const DEFAULT_MODELS: Record<LLMProvider, string> = {
@@ -179,6 +222,8 @@ export type RedundancyKind =
   | 'error_ping_pong'
   | 'no_op_mutation'
   | 'duplicate_tool_call'
+  | 'undeclared_file_access'
+  | 'redundant_reference_read'
 
 export interface RedundantCallFinding {
   step_indices: number[]
@@ -215,6 +260,18 @@ export interface TrajectoryTimelineStep {
   tokens: number
 }
 
+export interface ReferenceAccessAudit {
+  declared_references: string[]
+  accessed_files: string[]
+  referenced_files_accessed: string[]
+  unaccessed_references: string[]
+  undeclared_accesses: string[]
+  coverage_ratio: number
+  coverage_pct: number
+  redundant_reference_reads: string[]
+  summary: string
+}
+
 export interface TrajectoryProfileReport {
   task_id: string
   skill_name: string
@@ -224,4 +281,5 @@ export interface TrajectoryProfileReport {
   token_efficiency: TokenEfficiencyAnalysis
   redundancies: RedundantCallFinding[]
   timeline_summary: TrajectoryTimelineStep[]
+  reference_audit?: ReferenceAccessAudit | null
 }

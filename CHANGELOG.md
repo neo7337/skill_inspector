@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.4] - 2026-10-24
+
+### Added
+- **Skill Package Resolution Engine**: Added `SkillPackage` abstraction, safe relative path resolution, directory traversal prevention, file kind classification (`script`, `reference`, `asset`), and on-demand file token counters.
+- **Static Validation Package Reference Rules**: New validation rules verifying file existence (`references.file-exists`), path traversal prevention (`references.path-traversal`), empty file warning (`references.not-empty`), and peak context token footprint safety (`references.peak-token-budget`).
+- **Package Inspection API & Schemas**: Added `POST /skill/package` inspection endpoint and updated `/validate/static` and `/validate/llm` with optional `base_dir` parameter.
+- **CLI Package Companion**: Integrated `--base-dir` option into `skill-inspector validate` with Rich tabular output for referenced files, file kind, status, size, and token footprint.
+- **LLM Judge Package Context**: Grounding LLM prompts with actual on-disk referenced file contents and summaries.
+- **Trajectory Profiler Reference Access Audit**: Audit of declared vs accessed referenced files with coverage metrics and detection of redundant reference reads.
+- **Frontend Base Directory Toolbar & File Drawer**: App toolbar for base directory configuration with live status pills (`Ready`, `Unresolved`, `Scanning`, `Idle`), multi-tier context cost gauge (Catalog, Activation Body, On-Demand References), and slide-over syntax-highlighted reference file drawer.
+- **Real-World Sample Packages**: Created full `pdf-processing` (`samples/valid-skill`) package with Python scripts (`extract.py`, `fill_form.py`, `merge.py`) and reference documentation (`guide.md`), along with `samples/broken-package` for flaw demonstration.
+
+---
+
 ## [0.0.3] - 2026-10-22
 
 ### Added

@@ -16,11 +16,19 @@ import logging
 import os
 import re
 import time
+from pathlib import Path
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
 from app.parser import FileReference, SkillDocument
+from app.package import (
+    ReferenceFileStatus,
+    ResolvedFileReference,
+    PackageTokenEconomy,
+    SkillPackage,
+    resolve_skill_package,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +44,7 @@ class ProviderConfig(BaseModel):
     model: str
     api_key: str | None = None
     base_url: str | None = None  # Used for Ollama, e.g. http://localhost:11434
+    include_references: bool = False
 
 
 # ── Report models ─────────────────────────────────────────────────────────────
@@ -88,6 +97,8 @@ class LLMReport(BaseModel):
     provider_used: str
     skill_tokens: SkillTokenEstimate = Field(default_factory=SkillTokenEstimate)
     referenced_files: list[FileReference] = Field(default_factory=list)
+    package_tokens: Optional[PackageTokenEconomy] = None
+    resolved_files: list[ResolvedFileReference] = Field(default_factory=list)
 
 
 # ── Prompt engineering ────────────────────────────────────────────────────────
@@ -95,6 +106,7 @@ class LLMReport(BaseModel):
 SYSTEM_PROMPT = """You are an expert evaluator of AI agent skill files (SKILL.md format from agentskills.io).
 
 You will be given the content of a SKILL.md file delimited by <skill_content> tags.
+If referenced files are provided, they will be delimited by <referenced_files> tags.
 Your job is to evaluate it across 4 dimensions and return ONLY valid JSON.
 
 Evaluation dimensions:
@@ -106,7 +118,7 @@ Evaluation dimensions:
    - 0-49: Vague, missing, or too short to be useful
 
 2. **instruction_clarity** (0-100): Are the body instructions clear, unambiguous, and structured for an LLM to follow reliably?
-   - 90-100: Step-by-step, no ambiguous pronouns, clear expected outcomes
+   - 90-100: Step-by-step, no ambiguous pronouns, clear expected outcomes; matches referenced files accurately
    - 70-89: Mostly clear with minor ambiguities
    - 50-69: Some steps are vague or could be misinterpreted
    - 0-49: Instructions are unclear, contradictory, or absent
@@ -118,7 +130,7 @@ Evaluation dimensions:
    - 0-49: No mention of scope limits or edge cases
 
 4. **token_efficiency** (0-100): Is the body content concise and necessary, or bloated with redundant/irrelevant content?
-   - 90-100: Every sentence adds value, no repetition
+   - 90-100: Every sentence adds value, no repetition; delegates detailed references cleanly
    - 70-89: Mostly concise with minor redundancy
    - 50-69: Some padding or repetition that should be cut
    - 0-49: Significantly bloated, repetitive, or off-topic sections
@@ -131,6 +143,7 @@ Status rules:
 Output rules:
 - Return ONLY valid JSON. No markdown, no explanation, no trailing text.
 - Complete the entire JSON object. Never truncate a string or omit a closing brace.
+- When <referenced_files> are provided, verify that the instructions in SKILL.md consistently and accurately reference their functions, commands, or parameters.
 - Each finding is one short sentence (max 25 words) describing a specific observation.
 - Each suggestion has a "text" field (max 25 words) and an optional "example" field with a ready-to-paste snippet.
 - At most 2 findings and 2 suggestions per dimension.
@@ -182,6 +195,39 @@ USER_PROMPT_TEMPLATE = """Please evaluate this SKILL.md content:
 </skill_content>
 
 Return only the JSON evaluation."""
+
+USER_PROMPT_WITH_REFS_TEMPLATE = """Please evaluate this SKILL.md content and its referenced files:
+
+<skill_content>
+{skill_content}
+</skill_content>
+
+<referenced_files>
+{referenced_files_content}
+</referenced_files>
+
+Return only the JSON evaluation."""
+
+
+def assemble_referenced_context(
+    resolved_files: list[ResolvedFileReference],
+    max_chars_per_file: int = 16000,
+) -> str:
+    """Format non-binary resolved reference files into an XML snippet for the LLM judge."""
+    parts = []
+    for ref in resolved_files:
+        if ref.status == ReferenceFileStatus.FOUND and not ref.is_binary:
+            try:
+                if ref.absolute_path and Path(ref.absolute_path).exists():
+                    text = Path(ref.absolute_path).read_text(encoding="utf-8", errors="replace")
+                else:
+                    text = ref.content_preview or ""
+                if len(text) > max_chars_per_file:
+                    text = text[:max_chars_per_file] + "\n... [content truncated for token budget]"
+                parts.append(f'<file path="{ref.relative_path}" kind="{ref.kind}">\n{text}\n</file>')
+            except Exception as exc:
+                logger.warning("Could not read referenced file %s: %s", ref.relative_path, exc)
+    return "\n".join(parts)
 
 
 # ── LLM client helpers ────────────────────────────────────────────────────────
@@ -339,6 +385,8 @@ def _make_error_report(
     provider: str,
     skill_tokens: SkillTokenEstimate | None = None,
     referenced_files: list[FileReference] | None = None,
+    package_tokens: PackageTokenEconomy | None = None,
+    resolved_files: list[ResolvedFileReference] | None = None,
 ) -> LLMReport:
     """Return a structured error report when LLM call fails."""
     error_dim = LLMDimensionResult(
@@ -358,39 +406,73 @@ def _make_error_report(
         provider_used=provider,
         skill_tokens=skill_tokens or SkillTokenEstimate(),
         referenced_files=referenced_files or [],
+        package_tokens=package_tokens,
+        resolved_files=resolved_files or [],
     )
 
 
 # ── Main entry point ──────────────────────────────────────────────────────────
 
-async def run_llm_validation(doc: SkillDocument, config: ProviderConfig) -> LLMReport:
+async def run_llm_validation(
+    doc: SkillDocument,
+    config: ProviderConfig,
+    base_dir: Optional[str | Path] = None,
+    package: Optional[SkillPackage] = None,
+) -> LLMReport:
     """
     Run LLM-as-a-Judge evaluation on a parsed SkillDocument.
 
     Supports OpenAI, Anthropic, and Ollama via provider-specific clients.
+    If base_dir or package is provided and config.include_references is True,
+    injects referenced file contents into the prompt for holistic consistency evaluation.
 
     Args:
         doc: Parsed SkillDocument.
         config: LLM provider configuration.
+        base_dir: Optional path to skill root directory.
+        package: Optional pre-resolved SkillPackage.
 
     Returns:
-        LLMReport with per-dimension scores, findings, and suggestions.
+        LLMReport with per-dimension scores, findings, suggestions, and package token metrics.
     """
+    pkg = package
+    if pkg is None and base_dir is not None:
+        try:
+            pkg = resolve_skill_package(base_dir, skill_content=doc.raw)
+        except Exception as exc:
+            logger.warning("Failed to resolve package in run_llm_validation: %s", exc)
+
     skill_tokens = SkillTokenEstimate(**doc.token_estimate)
     referenced_files = doc.referenced_files
+    package_tokens = pkg.tokens if pkg else None
+    resolved_files = pkg.resolved_files if pkg else []
+
+    if config.include_references and pkg is not None and pkg.resolved_files:
+        refs_content = assemble_referenced_context(pkg.resolved_files)
+        if refs_content:
+            user_content = USER_PROMPT_WITH_REFS_TEMPLATE.format(
+                skill_content=doc.raw,
+                referenced_files_content=refs_content,
+            )
+        else:
+            user_content = USER_PROMPT_TEMPLATE.format(skill_content=doc.raw)
+    else:
+        user_content = USER_PROMPT_TEMPLATE.format(skill_content=doc.raw)
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": USER_PROMPT_TEMPLATE.format(skill_content=doc.raw)},
+        {"role": "user", "content": user_content},
     ]
     prompt_chars = sum(len(m["content"]) for m in messages)
 
     logger.info(
-        "LLM judge start provider=%s model=%s base_url=%s skill_tokens=%s prompt_chars=%d",
+        "LLM judge start provider=%s model=%s base_url=%s skill_tokens=%s prompt_chars=%d include_refs=%s",
         config.provider,
         config.model,
         config.base_url or "(default)",
         skill_tokens.model_dump(),
         prompt_chars,
+        config.include_references,
     )
     t0 = time.perf_counter()
 
@@ -409,6 +491,8 @@ async def run_llm_validation(doc: SkillDocument, config: ProviderConfig) -> LLMR
             config.provider,
             skill_tokens=skill_tokens,
             referenced_files=referenced_files,
+            package_tokens=package_tokens,
+            resolved_files=resolved_files,
         )
 
     logger.info(
@@ -444,6 +528,8 @@ async def run_llm_validation(doc: SkillDocument, config: ProviderConfig) -> LLMR
                 config.provider,
                 skill_tokens=skill_tokens,
                 referenced_files=referenced_files,
+                package_tokens=package_tokens,
+                resolved_files=resolved_files,
             )
 
     logger.info(
@@ -456,4 +542,6 @@ async def run_llm_validation(doc: SkillDocument, config: ProviderConfig) -> LLMR
     return report.model_copy(update={
         "skill_tokens": skill_tokens,
         "referenced_files": referenced_files,
+        "package_tokens": package_tokens,
+        "resolved_files": resolved_files,
     })

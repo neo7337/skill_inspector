@@ -1,19 +1,36 @@
 import axios from 'axios'
-import type { StaticValidationResult, LLMValidationResult, ProviderConfig } from './types'
+import type {
+  StaticValidationResult,
+  LLMValidationResult,
+  ProviderConfig,
+  SkillPackageInspectionResult,
+  RepairPlanResult,
+  LLMRefactorResult,
+  ScenarioSuite,
+  TrajectoryProfileReport,
+  DiffReport,
+} from './types'
 
 const api = axios.create({
   baseURL: 'http://localhost:8000',
   timeout: 180_000, // 180s — local models are slow; a truncated JSON reply is retried once
 })
 
-export async function validateStatic(content: string): Promise<StaticValidationResult> {
-  const { data } = await api.post<StaticValidationResult>('/validate/static', { content })
+export async function validateStatic(
+  content: string,
+  baseDir?: string,
+): Promise<StaticValidationResult> {
+  const { data } = await api.post<StaticValidationResult>('/validate/static', {
+    content,
+    base_dir: baseDir || null,
+  })
   return data
 }
 
 export async function validateLLM(
   content: string,
   config: ProviderConfig,
+  baseDir?: string,
 ): Promise<LLMValidationResult> {
   const { data } = await api.post<LLMValidationResult>('/validate/llm', {
     content,
@@ -21,17 +38,22 @@ export async function validateLLM(
     model: config.model,
     api_key: config.api_key || null,
     base_url: config.base_url || null,
+    base_dir: baseDir || null,
+    include_references: Boolean(config.include_references),
   })
   return data
 }
 
-import type {
-  RepairPlanResult,
-  LLMRefactorResult,
-  ScenarioSuite,
-  TrajectoryProfileReport,
-  DiffReport,
-} from './types'
+export async function inspectPackage(
+  baseDir: string,
+  content?: string,
+): Promise<SkillPackageInspectionResult> {
+  const { data } = await api.post<SkillPackageInspectionResult>('/skill/package', {
+    base_dir: baseDir,
+    content: content || null,
+  })
+  return data
+}
 
 export async function getRepairPlan(content: string): Promise<RepairPlanResult> {
   const { data } = await api.post<RepairPlanResult>('/repair/plan', { content })
@@ -95,11 +117,14 @@ export async function profileTrajectory(
   trace: any,
   skillContent?: string,
   baselineSteps?: number,
+  baseDir?: string,
 ): Promise<TrajectoryProfileReport> {
   const { data } = await api.post<TrajectoryProfileReport>('/profiler/trajectory', {
     trace,
     skill_content: skillContent || null,
     baseline_steps: baselineSteps || null,
+    base_dir: baseDir || null,
   })
   return data
 }
+

@@ -1,12 +1,23 @@
 import { useState } from 'react'
-import type { StaticValidationResult, RuleStatus, ApplyableFix, StaticFinding } from '../types'
+import type {
+  StaticValidationResult,
+  RuleStatus,
+  ApplyableFix,
+  StaticFinding,
+  SkillPackageSummary,
+  ResolvedFileReference,
+  ReferencedFile,
+} from '../types'
 import { StatusBadge, StatusIcon } from './StatusBadge'
 import { OverallScoreRing } from './ScoreBar'
+import { SkillTokenBreakdown } from './SkillTokenBreakdown'
 
 export interface StaticReportProps {
   result: StaticValidationResult | null
   isLoading: boolean
   isDark?: boolean
+  packageSummary?: SkillPackageSummary | null
+  onSelectFile?: (file: ResolvedFileReference | ReferencedFile) => void
   onApplyFix?: (fix: ApplyableFix, resolvedRule?: string) => void
 }
 
@@ -25,7 +36,13 @@ function dimensionStatus(findings: StaticFinding[]): RuleStatus {
   return 'pass'
 }
 
-export function StaticReport({ result, isLoading, onApplyFix }: StaticReportProps) {
+export function StaticReport({
+  result,
+  isLoading,
+  packageSummary,
+  onSelectFile,
+  onApplyFix,
+}: StaticReportProps) {
   const [expandedDims, setExpandedDims] = useState<Set<string>>(new Set())
   const [appliedRules, setAppliedRules] = useState<Set<string>>(new Set())
 
@@ -150,8 +167,19 @@ export function StaticReport({ result, isLoading, onApplyFix }: StaticReportProp
   const passCount = result.findings.filter(f => f.status === 'pass').length
   const allExpanded = expandedDims.size === allDims.length
 
+  const pkg = packageSummary ?? result.package
+  const hasTokenInfo = pkg || result.skill_tokens || (result.referenced_files && result.referenced_files.length > 0)
+
   return (
     <div className="space-y-4">
+      {hasTokenInfo && (
+        <SkillTokenBreakdown
+          tokens={result.skill_tokens}
+          referencedFiles={result.referenced_files}
+          packageSummary={pkg}
+          onSelectFile={onSelectFile}
+        />
+      )}
       {/* Summary Overview Card */}
       <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 shadow-xs backdrop-blur-md flex flex-col sm:flex-row items-center gap-5">
         <OverallScoreRing score={result.score} size="md" />

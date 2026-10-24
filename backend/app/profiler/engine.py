@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 import re
 from typing import Any
 
@@ -17,9 +18,113 @@ from app.profiler.models import (
     StepBudgetAnalysis,
     TokenEfficiencyAnalysis,
     TrajectoryProfileReport,
+    ReferenceAccessAudit,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_path(p: str) -> str:
+    """Normalize file path for consistent matching."""
+    p = p.strip().replace("\\", "/")
+    while p.startswith("./"):
+        p = p[2:]
+    return p.lstrip("/")
+
+
+def _extract_file_paths_from_tool_call(call: ToolCallRecord) -> list[str]:
+    """Extract candidate file paths targeted by a tool call."""
+    paths: list[str] = []
+    args = call.tool_arguments or {}
+
+    # 1. Direct path arguments
+    for key in (
+        "AbsolutePath",
+        "TargetFile",
+        "path",
+        "file_path",
+        "file",
+        "filename",
+        "filepath",
+        "doc_path",
+        "source_file",
+    ):
+        val = args.get(key)
+        if isinstance(val, str) and val.strip():
+            val = val.strip()
+            if not val.startswith(("http://", "https://")):
+                paths.append(val)
+
+    # 2. Command line arguments (for bash/run_command/exec)
+    for cmd_key in ("CommandLine", "command", "cmd", "script"):
+        cmd = args.get(cmd_key)
+        if isinstance(cmd, str) and cmd.strip():
+            matches = re.findall(
+                r'(?:cat|head|tail|python\d?|bash|sh|\.\/)\s+(?:-[^\s]+\s+)*([^\s;&|]+)',
+                cmd,
+            )
+            for m in matches:
+                m = m.strip().strip("'\"")
+                if m and not m.startswith("-") and not m.startswith(("http://", "https://")):
+                    paths.append(m)
+
+            direct_scripts = re.findall(
+                r'(?:^|[;&|\s])(\.?\.?/[^\s;&|]+\.(?:py|sh|bash|md|txt|json|yaml|yml|js|ts))',
+                cmd,
+            )
+            for s in direct_scripts:
+                s = s.strip().strip("'\"")
+                if s and not s.startswith(("http://", "https://")):
+                    paths.append(s)
+
+    # Deduplicate preserving order
+    seen = set()
+    deduped = []
+    for p in paths:
+        if p not in seen:
+            seen.add(p)
+            deduped.append(p)
+    return deduped
+
+
+def _match_path_to_declared(
+    accessed_path: str,
+    declared_paths: list[str],
+    base_dir: str | None = None,
+) -> str | None:
+    """Returns the declared reference path if accessed_path matches one, or None."""
+    acc_clean = _normalize_path(accessed_path)
+
+    # 1. Exact match against normalized declared paths
+    for dec in declared_paths:
+        if acc_clean == _normalize_path(dec):
+            return dec
+
+    # 2. If base_dir is available, try filesystem-level resolution
+    if base_dir:
+        try:
+            base = Path(base_dir).resolve()
+            acc_p = Path(accessed_path)
+            if not acc_p.is_absolute():
+                acc_p = (base / acc_p).resolve()
+            else:
+                acc_p = acc_p.resolve()
+
+            for dec in declared_paths:
+                dec_p = (base / _normalize_path(dec)).resolve()
+                if acc_p == dec_p:
+                    return dec
+        except Exception:
+            pass
+
+    # 3. Path suffix match (e.g. /workspace/skills/my-skill/references/guide.md matches references/guide.md)
+    for dec in declared_paths:
+        dec_clean = _normalize_path(dec)
+        if acc_clean.endswith("/" + dec_clean):
+            return dec
+
+    return None
+
 
 
 def _jaccard_similarity(str1: str, str2: str) -> float:
@@ -132,17 +237,44 @@ class TrajectoryProfiler:
         skill_content: str | None = None,
         custom_baseline_steps: int | None = None,
         baseline_steps: int | None = None,
+        base_dir: str | None = None,
+        skill_package: Any | None = None,
     ) -> TrajectoryProfileReport:
         effective_baseline = custom_baseline_steps if custom_baseline_steps is not None else baseline_steps
         trace = parse_trace_from_raw(trace_data)
-        if skill_content and not trace.skill_content:
-            trace.skill_content = skill_content
+        
+        # Resolve declared references if skill_content, base_dir, or skill_package is provided
+        declared_refs: list[str] = []
+        effective_skill_content = skill_content or trace.skill_content
+
+        if skill_package is not None and hasattr(skill_package, "skill_doc"):
+            declared_refs = [r.path for r in skill_package.skill_doc.referenced_files]
+            if not effective_skill_content:
+                effective_skill_content = skill_package.skill_doc.raw
+        elif effective_skill_content:
+            try:
+                from app.parser import parse_skill_md
+                doc = parse_skill_md(effective_skill_content)
+                declared_refs = [r.path for r in doc.referenced_files]
+            except Exception as exc:
+                logger.warning("Failed to parse skill_content in profiler: %s", exc)
+        elif base_dir:
+            try:
+                from app.package import resolve_skill_package
+                pkg = resolve_skill_package(base_dir)
+                declared_refs = [r.path for r in pkg.skill_doc.referenced_files]
+                effective_skill_content = pkg.skill_doc.raw
+            except Exception as exc:
+                logger.warning("Failed to resolve package from base_dir in profiler: %s", exc)
+
+        if effective_skill_content and not trace.skill_content:
+            trace.skill_content = effective_skill_content
 
         tool_calls = trace.tool_calls
         redundancies: list[RedundantCallFinding] = []
         redundant_step_indices: set[int] = set()
 
-        # Step 1: Detect Subsumed File Reads
+        # Step 1: Detect Subsumed File Reads & Redundant Reference Reads
         # Tracks last viewed file and whether a write/mutation occurred in between
         file_reads: dict[str, list[int]] = {}
         file_write_tools = {"write_to_file", "replace_file_content", "multi_replace_file_content", "edit_file"}
@@ -158,26 +290,45 @@ class TrajectoryProfiler:
             elif any(r in tname for r in file_read_tools):
                 path = str(call.tool_arguments.get("AbsolutePath") or call.tool_arguments.get("path") or "")
                 if path:
+                    matched_ref = _match_path_to_declared(path, declared_refs, base_dir) if declared_refs else None
                     if path in file_reads:
                         past_indices = file_reads[path]
                         all_indices = past_indices + [call.step_index]
                         redundant_step_indices.add(call.step_index)
-                        redundancies.append(
-                            RedundantCallFinding(
-                                step_indices=all_indices,
-                                kind="subsumed_file_read",
-                                severity="warn",
-                                title=f"Redundant file read on '{path.split('/')[-1]}'",
-                                detail=(
-                                    f"File '{path}' was read at step {call.step_index} despite having already been "
-                                    f"read at step(s) {past_indices} without any intervening file edits."
-                                ),
-                                suggested_skill_fix=(
-                                    "Instruct the agent in SKILL.md to retain file context or read specific "
-                                    "line ranges rather than re-reading the entire file multiple times."
-                                ),
+                        if matched_ref:
+                            redundancies.append(
+                                RedundantCallFinding(
+                                    step_indices=all_indices,
+                                    kind="redundant_reference_read",
+                                    severity="warn",
+                                    title=f"Redundant reference read on '{matched_ref.split('/')[-1]}'",
+                                    detail=(
+                                        f"Declared reference '{matched_ref}' was read at step {call.step_index} despite having already been "
+                                        f"read at step(s) {past_indices} without any intervening file edits."
+                                    ),
+                                    suggested_skill_fix=(
+                                        f"Instruct the agent in SKILL.md to retain content from '{matched_ref}' in context rather than "
+                                        "re-reading the reference file multiple times."
+                                    ),
+                                )
                             )
-                        )
+                        else:
+                            redundancies.append(
+                                RedundantCallFinding(
+                                    step_indices=all_indices,
+                                    kind="subsumed_file_read",
+                                    severity="warn",
+                                    title=f"Redundant file read on '{path.split('/')[-1]}'",
+                                    detail=(
+                                        f"File '{path}' was read at step {call.step_index} despite having already been "
+                                        f"read at step(s) {past_indices} without any intervening file edits."
+                                    ),
+                                    suggested_skill_fix=(
+                                        "Instruct the agent in SKILL.md to retain file context or read specific "
+                                        "line ranges rather than re-reading the entire file multiple times."
+                                    ),
+                                )
+                            )
                         file_reads[path].append(call.step_index)
                     else:
                         file_reads[path] = [call.step_index]
@@ -246,6 +397,107 @@ class TrajectoryProfiler:
                             ),
                         )
                     )
+
+        # Step 3b: Reference Access Audit (Trace vs Declared Skill References)
+        reference_audit: ReferenceAccessAudit | None = None
+        if declared_refs or effective_skill_content or base_dir:
+            accessed_files_set: set[str] = set()
+            accessed_declared: set[str] = set()
+            undeclared_set: set[str] = set()
+            ref_reads_map: dict[str, list[int]] = {}
+
+            for call in tool_calls:
+                paths = _extract_file_paths_from_tool_call(call)
+                for p in paths:
+                    p_norm = _normalize_path(p)
+                    # Ignore the skill document itself
+                    if p_norm.lower() == "skill.md" or p_norm.lower().endswith("/skill.md"):
+                        continue
+
+                    accessed_files_set.add(p)
+                    matched_ref = _match_path_to_declared(p, declared_refs, base_dir) if declared_refs else None
+                    if matched_ref:
+                        accessed_declared.add(matched_ref)
+                        if matched_ref not in ref_reads_map:
+                            ref_reads_map[matched_ref] = []
+                        ref_reads_map[matched_ref].append(call.step_index)
+                    else:
+                        # Undeclared file access
+                        if p not in undeclared_set:
+                            undeclared_set.add(p)
+                            redundancies.append(
+                                RedundantCallFinding(
+                                    step_indices=[call.step_index],
+                                    kind="undeclared_file_access",
+                                    severity="warn",
+                                    title=f"Undeclared file access: '{p.split('/')[-1]}'",
+                                    detail=(
+                                        f"Step {call.step_index} accessed file '{p}', which is not declared "
+                                        "in SKILL.md referenced files."
+                                    ),
+                                    suggested_skill_fix=(
+                                        f"Declare '{p}' in SKILL.md references or links if this file is a required dependency."
+                                    ),
+                                )
+                            )
+
+            # Redundant reference reads from commands/tools not caught by Step 1
+            existing_ref_findings = {
+                f.title for f in redundancies if f.kind == "redundant_reference_read"
+            }
+            for r, steps in ref_reads_map.items():
+                if len(steps) > 1:
+                    title = f"Redundant reference read on '{r.split('/')[-1]}'"
+                    if title not in existing_ref_findings:
+                        redundant_step_indices.update(steps[1:])
+                        redundancies.append(
+                            RedundantCallFinding(
+                                step_indices=steps,
+                                kind="redundant_reference_read",
+                                severity="warn",
+                                title=title,
+                                detail=(
+                                    f"Declared reference '{r}' was accessed {len(steps)} times "
+                                    f"at steps {steps} without retaining context."
+                                ),
+                                suggested_skill_fix=(
+                                    f"Instruct the agent in SKILL.md to retain content from '{r}' "
+                                    "in context rather than re-reading it."
+                                ),
+                            )
+                        )
+
+            unaccessed = [r for r in declared_refs if r not in accessed_declared]
+            redundant_refs = [r for r, steps in ref_reads_map.items() if len(steps) > 1]
+
+            coverage_ratio = round(len(accessed_declared) / len(declared_refs), 2) if declared_refs else 1.0
+            coverage_pct = round((len(accessed_declared) / len(declared_refs)) * 100, 1) if declared_refs else 100.0
+
+            summary_parts = []
+            if declared_refs:
+                summary_parts.append(
+                    f"{len(accessed_declared)}/{len(declared_refs)} declared references accessed ({coverage_pct}% coverage)."
+                )
+            else:
+                summary_parts.append("0 declared references in skill.")
+
+            if undeclared_set:
+                summary_parts.append(f"{len(undeclared_set)} undeclared file access(es) flagged.")
+            if redundant_refs:
+                summary_parts.append(f"{len(redundant_refs)} declared reference(s) read redundantly.")
+            summary = " ".join(summary_parts)
+
+            reference_audit = ReferenceAccessAudit(
+                declared_references=declared_refs,
+                accessed_files=sorted(list(accessed_files_set)),
+                referenced_files_accessed=sorted(list(accessed_declared)),
+                unaccessed_references=sorted(unaccessed),
+                undeclared_accesses=sorted(list(undeclared_set)),
+                coverage_ratio=coverage_ratio,
+                coverage_pct=coverage_pct,
+                redundant_reference_reads=sorted(redundant_refs),
+                summary=summary,
+            )
 
         # Step 4: Step Budget Tracking
         actual_steps = len(tool_calls)
@@ -349,4 +601,5 @@ class TrajectoryProfiler:
             token_efficiency=token_analysis,
             redundancies=redundancies,
             timeline_summary=timeline,
+            reference_audit=reference_audit,
         )
