@@ -196,6 +196,52 @@ class TestLLMValidateEndpoint:
         assert "overall_score" in data
         assert data["overall_status"] == "pass"
 
+    async def test_llm_with_base_dir_and_include_references(self, client: AsyncClient, tmp_path):
+        from app.validators.llm_judge import LLMReport, LLMDimensionResult
+        from app.package import resolve_skill_package
+
+        skill_file = tmp_path / "SKILL.md"
+        skill_file.write_text(VALID_SKILL + "\nSee [guide](docs/guide.md)\n")
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "guide.md").write_text("# Guide\nDetailed guide.")
+
+        pkg = resolve_skill_package(str(tmp_path))
+        mock_dim = LLMDimensionResult(score=90, status="pass", findings=["Great"], suggestions=[])
+        mock_report = LLMReport(
+            description_quality=mock_dim,
+            instruction_clarity=mock_dim,
+            scope_and_boundaries=mock_dim,
+            token_efficiency=mock_dim,
+            overall_score=90,
+            overall_status="pass",
+            model_used="gpt-4o",
+            provider_used="openai",
+            package_tokens=pkg.tokens,
+            resolved_files=pkg.resolved_files,
+        )
+
+        with patch("app.main.run_llm_validation", new=AsyncMock(return_value=mock_report)) as mock_run:
+            response = await client.post("/validate/llm", json={
+                "content": VALID_SKILL,
+                "provider": "openai",
+                "model": "gpt-4o",
+                "base_dir": str(tmp_path),
+                "include_references": True,
+            })
+            assert response.status_code == 200
+            mock_run.assert_awaited_once()
+            call_kwargs = mock_run.await_args.kwargs
+            assert call_kwargs["base_dir"] == str(tmp_path)
+            config = mock_run.await_args.args[1]
+            assert config.include_references is True
+
+        data = response.json()
+        assert "package" in data
+        assert data["package"]["base_dir"] == str(tmp_path)
+        assert data["package"]["found_files_count"] == 1
+
+
 
 JUDGE_JSON = json.dumps({
     "description_quality": {"score": 80, "status": "pass", "findings": [], "suggestions": []},

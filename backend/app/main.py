@@ -50,6 +50,7 @@ class LLMValidateRequest(BaseModel):
     api_key: str | None = None
     base_url: str | None = None
     base_dir: str | None = None
+    include_references: bool = False
 
 
 class PackageInspectRequest(BaseModel):
@@ -236,9 +237,10 @@ async def validate_llm(request: LLMValidateRequest):
         model=request.model.strip(),
         api_key=request.api_key or None,
         base_url=request.base_url or None,
+        include_references=request.include_references,
     )
 
-    report = await run_llm_validation(doc, config)
+    report = await run_llm_validation(doc, config, base_dir=request.base_dir)
     logger.info(
         "POST /validate/llm done provider=%s model=%s overall_status=%s overall_score=%s",
         report.provider_used,
@@ -247,18 +249,14 @@ async def validate_llm(request: LLMValidateRequest):
         report.overall_score,
     )
     result = report.model_dump()
-    if request.base_dir:
-        try:
-            pkg = resolve_skill_package(request.base_dir, skill_content=request.content)
-            result["package"] = {
-                "base_dir": pkg.base_dir,
-                "resolved_files": [r.model_dump() for r in pkg.resolved_files],
-                "tokens": pkg.tokens.model_dump(),
-                "missing_files_count": pkg.missing_files_count,
-                "found_files_count": pkg.found_files_count,
-            }
-        except Exception as exc:
-            logger.warning("Failed to resolve package in /validate/llm: %s", exc)
+    if request.base_dir and report.package_tokens is not None:
+        result["package"] = {
+            "base_dir": request.base_dir,
+            "resolved_files": [r.model_dump() for r in report.resolved_files],
+            "tokens": report.package_tokens.model_dump(),
+            "missing_files_count": sum(1 for r in report.resolved_files if r.status == "missing"),
+            "found_files_count": sum(1 for r in report.resolved_files if r.status == "found"),
+        }
     return result
 
 
