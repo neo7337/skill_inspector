@@ -4,6 +4,7 @@ import { profileTrajectory } from '../api'
 
 interface TrajectoryReportProps {
   skillContent: string
+  baseDir?: string
 }
 
 const SAMPLE_THRASHING_TRACE = {
@@ -86,7 +87,7 @@ const SAMPLE_THRASHING_TRACE = {
   ],
 }
 
-export const TrajectoryReport: React.FC<TrajectoryReportProps> = ({ skillContent }) => {
+export const TrajectoryReport: React.FC<TrajectoryReportProps> = ({ skillContent, baseDir }) => {
   const [traceText, setTraceText] = useState('')
   const [customBaseline, setCustomBaseline] = useState<number | ''>('')
   const [loading, setLoading] = useState(false)
@@ -137,7 +138,7 @@ export const TrajectoryReport: React.FC<TrajectoryReportProps> = ({ skillContent
       }
 
       const baseline = customBaseline === '' ? undefined : Number(customBaseline)
-      const res = await profileTrajectory(parsedTrace, skillContent, baseline)
+      const res = await profileTrajectory(parsedTrace, skillContent, baseline, baseDir)
       setReport(res)
       setInputCollapsed(true)
     } catch (err: any) {
@@ -472,6 +473,46 @@ export const TrajectoryReport: React.FC<TrajectoryReportProps> = ({ skillContent
               </p>
             </div>
           </div>
+
+          {/* Reference Access Audit Card */}
+          {report.reference_audit && (
+            <div className="p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900/80 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">📦</span>
+                  <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                    Package Reference Access Audit
+                  </h3>
+                </div>
+                <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                  {report.reference_audit.coverage_pct}% Coverage
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {report.reference_audit.summary}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-xs">
+                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-200/60 dark:border-slate-800/60">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wide block">Declared vs Accessed</span>
+                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200 mt-0.5 block">
+                    {report.reference_audit.referenced_files_accessed.length} / {report.reference_audit.declared_references.length} files
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-200/60 dark:border-slate-800/60">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wide block">Undeclared Accesses</span>
+                  <span className={`font-mono font-bold mt-0.5 block ${report.reference_audit.undeclared_accesses.length > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                    {report.reference_audit.undeclared_accesses.length} {report.reference_audit.undeclared_accesses.length === 1 ? 'file' : 'files'}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-200/60 dark:border-slate-800/60">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wide block">Redundant Reads</span>
+                  <span className={`font-mono font-bold mt-0.5 block ${report.reference_audit.redundant_reference_reads.length > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+                    {report.reference_audit.redundant_reference_reads.length} {report.reference_audit.redundant_reference_reads.length === 1 ? 'file' : 'files'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Detected Redundant Patterns / Thrashing Warnings */}
           {report.redundancies.length > 0 && (
