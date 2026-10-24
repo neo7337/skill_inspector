@@ -415,9 +415,9 @@ export default function App() {
   const isDark = theme === 'dark'
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#070b12] text-slate-900 dark:text-slate-100 transition-colors duration-200">
+    <div className="h-screen flex flex-col overflow-hidden bg-slate-50 dark:bg-[#070b12] text-slate-900 dark:text-slate-100 transition-colors duration-200">
       {/* Header */}
-      <header className="sticky top-0 z-40 px-5 sm:px-6 py-3 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl flex items-center justify-between shadow-xs transition-colors duration-200">
+      <header className="shrink-0 z-40 px-5 sm:px-6 py-3 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl flex items-center justify-between shadow-xs transition-colors duration-200">
         {/* Brand Mark */}
         <div className="flex items-center gap-3 select-none">
           <div className="relative group flex items-center justify-center">
@@ -502,7 +502,7 @@ export default function App() {
       </header>
 
       {/* Base Directory Toolbar */}
-      <div className="border-b border-slate-200/80 dark:border-slate-800/80 bg-white/75 dark:bg-[#090e1c]/75 backdrop-blur-md px-6 py-2 flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div className="shrink-0 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/75 dark:bg-[#090e1c]/75 backdrop-blur-md px-6 py-2 flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-3 flex-1 min-w-[320px]">
           <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium shrink-0">
             <svg className="w-4 h-4 text-indigo-500 dark:text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -602,11 +602,11 @@ export default function App() {
       </div>
 
       {/* Main layout */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left: Editor Workspace */}
-        <div className="w-1/2 flex flex-col border-r border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#070b14]">
+        <div className="w-1/2 flex flex-col min-h-0 border-r border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#070b14]">
           {/* Editor toolbar */}
-          <div className="px-4 py-2.5 border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-50/70 dark:bg-[#090e1c]/70 backdrop-blur-sm flex items-center justify-between">
+          <div className="shrink-0 px-4 py-2.5 border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-50/70 dark:bg-[#090e1c]/70 backdrop-blur-sm flex items-center justify-between">
             {/* Breadcrumb Chip */}
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 text-slate-700 dark:text-slate-300 text-xs font-mono font-medium shadow-xs">
@@ -688,7 +688,7 @@ export default function App() {
           </div>
 
           {/* Textarea Editor Container */}
-          <div className="flex-1 relative bg-white dark:bg-[#070b14]">
+          <div className="flex-1 min-h-0 relative bg-white dark:bg-[#070b14]">
             <textarea
               value={content}
               onChange={e => setContent(e.target.value)}
@@ -696,7 +696,7 @@ export default function App() {
               spellCheck={false}
               className={`
                 absolute inset-0 w-full h-full text-sm font-mono
-                p-5 resize-none focus:outline-none scrollbar-thin
+                p-5 resize-none focus:outline-none scrollbar-thin overflow-y-auto
                 leading-relaxed transition-all duration-300
                 bg-transparent text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600
                 ${applyFlash
@@ -708,7 +708,7 @@ export default function App() {
           </div>
 
           {/* Editor Stats Bar with Token Gauge */}
-          <div className="px-4 py-2 border-t border-slate-200/80 dark:border-slate-800/80 bg-slate-50/70 dark:bg-[#090e1c]/70 backdrop-blur-sm flex items-center justify-between text-xs select-none">
+          <div className="shrink-0 px-4 py-2 border-t border-slate-200/80 dark:border-slate-800/80 bg-slate-50/70 dark:bg-[#090e1c]/70 backdrop-blur-sm flex items-center justify-between text-xs select-none">
             <div className="flex items-center gap-3.5 text-slate-500 dark:text-slate-400 font-mono text-[11px]">
               <span>{content.length.toLocaleString()} chars</span>
               <span className="text-slate-300 dark:text-slate-700">•</span>
@@ -764,9 +764,9 @@ export default function App() {
         </div>
 
         {/* Right: Report Panel */}
-        <div className="w-1/2 flex flex-col bg-slate-50/50 dark:bg-[#070b12]/50">
+        <div className="w-1/2 flex flex-col min-h-0 bg-slate-50/50 dark:bg-[#070b12]/50">
           {/* Segmented Tab Bar */}
-          <div className="px-3.5 py-2 border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-100/50 dark:bg-[#090e1c]/50 backdrop-blur-md flex items-center gap-1.5 overflow-x-auto scrollbar-thin">
+          <div className="shrink-0 px-3.5 py-2 border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-100/50 dark:bg-[#090e1c]/50 backdrop-blur-md flex items-center gap-1.5 overflow-x-auto scrollbar-thin">
             <button
               type="button"
               onClick={() => setActiveTab('static')}
@@ -882,7 +882,7 @@ export default function App() {
           </div>
 
           {/* Panel content */}
-          <div className="flex-1 overflow-y-auto p-4 scrollbar-thin space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 scrollbar-thin space-y-4">
             {activeTab === 'static' && (
               <StaticReport
                 result={staticResult}

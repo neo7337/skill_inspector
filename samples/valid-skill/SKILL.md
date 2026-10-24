@@ -33,6 +33,10 @@ This skill handles all common PDF operations including text extraction, form fil
 2. Run: `scripts/merge.py <file1> <file2> ... --output merged.pdf`
 3. Confirm successful merge and report the output file path.
 
+### Reference & Troubleshooting
+
+Consult `references/guide.md` for form field schemas, encryption rules, and batch processing guidelines.
+
 ## Edge Cases
 
 - Do NOT attempt to edit PDFs that appear to be digitally signed.
