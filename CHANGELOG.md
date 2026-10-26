@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.5] - 2026-10-26
+
+### Added
+- **GitHub Actions CI/CD Workflow**: Implemented automated CI pipeline (`.github/workflows/ci.yml`) for pull requests and pushes to `main`:
+  - **Step 1 (Static Checks)**: Parallel execution of backend Ruff syntax/critical checks and frontend Oxlint & TypeScript type checking (`tsc -b`).
+  - **Step 2 (Automated Testing)**: Pytest test suite execution with test coverage tracking and XML report artifact upload.
+  - **Step 3 (Parallel Builds)**: Parallel compilation of backend distribution packages (wheel & source distributions via `python -m build`) and frontend production bundle (`npm run build`).
+- **Repository Hygiene & Ignore Rules**: Updated `.gitignore` to omit distribution directories (`dist/`, `build/`, `*.egg-info/`) and linter/test caches (`.ruff_cache/`, `.pytest_cache/`).
+
+---
+
 ## [0.0.4] - 2026-10-24
 
 ### Added
@@ -72,6 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docker Support**: Containerized multi-stage Dockerfile and Docker Compose environment with Ollama network integration.
 - **Initial Documentation & Samples**: Added project README, MIT license, and sample test skills (`valid-skill`, `broken-skill`, `sample-trace.json`).
 
+[Unreleased]: https://github.com/neo7337/skill_inspector/compare/0.0.4...HEAD
+[0.0.4]: https://github.com/neo7337/skill_inspector/compare/0.0.3...0.0.4
 [0.0.3]: https://github.com/neo7337/skill_inspector/compare/0.0.2...0.0.3
 [0.0.2]: https://github.com/neo7337/skill_inspector/compare/v0.0.1...0.0.2
 [0.0.1]: https://github.com/neo7337/skill_inspector/releases/tag/v0.0.1
