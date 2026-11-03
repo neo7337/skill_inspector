@@ -15,11 +15,11 @@ export function ThemeToggle({ theme, onToggle, className = '' }: ThemeToggleProp
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
       className={`
         relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center
-        bg-white/80 dark:bg-slate-900/80 backdrop-blur-md
-        border border-slate-200/80 dark:border-slate-800/80 shadow-sm
-        hover:border-slate-300 dark:hover:border-slate-700
-        hover:shadow-glow-sm hover:scale-[1.03] active:scale-[0.97]
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50
+        bg-white dark:bg-slate-800
+        border border-slate-200 dark:border-slate-700 shadow-sm
+        hover:border-slate-300 dark:hover:border-slate-600
+        hover:shadow-card hover:scale-[1.03] active:scale-[0.97]
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50
         transition-all duration-300 group overflow-hidden
         ${className}
       `}
@@ -50,8 +50,8 @@ export function ThemeToggle({ theme, onToggle, className = '' }: ThemeToggleProp
           w-5 h-5 absolute transition-all duration-500 ease-out
           ${
             !isDark
-              ? 'opacity-100 rotate-0 scale-100 text-indigo-600 drop-shadow-[0_0_8px_rgba(99,102,241,0.35)]'
-              : 'opacity-0 -rotate-90 scale-0 text-indigo-400 pointer-events-none'
+              ? 'opacity-100 rotate-0 scale-100 text-blue-600 dark:text-blue-400'
+              : 'opacity-0 -rotate-90 scale-0 text-blue-400 pointer-events-none'
           }
         `}
       >

@@ -5,7 +5,7 @@ type Theme = 'dark' | 'light'
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(() => {
     const stored = localStorage.getItem('skill-inspector-theme') as Theme | null
-    return stored ?? 'dark'
+    return stored ?? 'light'
   })
 
   useEffect(() => {
