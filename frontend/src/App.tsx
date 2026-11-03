@@ -698,7 +698,7 @@ export default function App() {
                 absolute inset-0 w-full h-full text-sm font-mono
                 p-5 resize-none focus:outline-none scrollbar-thin overflow-y-auto
                 leading-relaxed transition-all duration-300
-                bg-transparent text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600
+                bg-transparent text-slate-900 dark:text-slate-100 placeholder-slate-600 dark:placeholder-slate-400 placeholder:opacity-85
                 ${applyFlash
                   ? 'ring-2 ring-emerald-500/80 dark:ring-emerald-400/80 bg-emerald-500/5 shadow-[0_0_24px_rgba(16,185,129,0.2)]'
                   : ''
