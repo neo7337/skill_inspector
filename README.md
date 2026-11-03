@@ -12,6 +12,7 @@ A web-based validation studio and CLI companion for [agentskills.io](https://age
   - [Install and Run](#install-and-run)
 - [CLI Installation and Usage](#cli-installation-and-usage)
   - [Install CLI](#install-cli)
+  - [CLI Configuration](#cli-configuration)
   - [CLI Commands](#cli-commands)
 - [Backend API](#backend-api)
   - [Endpoints](#endpoints)
@@ -110,9 +111,60 @@ Alternatively, install directly from local repository:
 pip install -e .
 ```
 
+### CLI Configuration
+
+The CLI supports persistent user configuration stored at `~/.skill-inspector/config.json`. When configuration values are set, you no longer need to repeatedly pass provider, model, API key, base directory, or baseline options on every command.
+
+#### View & Initialize Configuration
+
+```bash
+# View active configuration and resolved values
+skill-inspector config
+
+# Display the configuration file path
+skill-inspector config --path
+
+# Initialize a default ~/.skill-inspector/config.json file
+skill-inspector config --init
+```
+
+#### Configuration Schema (`~/.skill-inspector/config.json`)
+
+```json
+{
+  "llm": {
+    "default_provider": "ollama",
+    "default_model": "llama3.1:latest",
+    "api_keys": {
+      "openai": "sk-...",
+      "anthropic": "sk-ant-..."
+    },
+    "ollama_base_url": "http://localhost:11434"
+  },
+  "validation": {
+    "base_dir": null
+  },
+  "profiler": {
+    "default_baseline_steps": 5
+  },
+  "scenarios": {
+    "default_format": "json",
+    "default_count": 12
+  }
+}
+```
+
+#### Configuration Resolution Hierarchy
+
+When executing commands, parameters resolve in the following order:
+1. **Explicit CLI Flags** (e.g. `--provider anthropic --model claude-3-5-haiku-20241022`)
+2. **User Configuration** (`~/.skill-inspector/config.json`)
+3. **Environment Variables** (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OLLAMA_BASE_URL`)
+4. **Built-in Defaults** (e.g. `count=12`, `format=json`)
+
 ### CLI Commands
 
-The companion CLI provides terminal validation, package inspection, auto-repair, trajectory profiling, and test generation:
+The companion CLI provides terminal validation, package inspection, auto-repair, trajectory profiling, test generation, and configuration management:
 
 ```bash
 # Validate SKILL.md with static structural checks
@@ -121,20 +173,25 @@ skill-inspector validate path/to/SKILL.md
 # Validate with full package resolution & reference auditing
 skill-inspector validate path/to/SKILL.md --base-dir path/to/skill-package
 
-# Run static + LLM-as-a-Judge evaluation via CLI
+# Run static + LLM-as-a-Judge (uses provider & model from ~/.skill-inspector/config.json)
+skill-inspector validate path/to/SKILL.md --llm
+
+# Explicitly override provider or model on demand
 skill-inspector validate path/to/SKILL.md --llm --provider openai --model gpt-4o
 
 # Auto-fix frontmatter schema errors & show unified diff
 skill-inspector fix path/to/SKILL.md --dry-run
 skill-inspector fix path/to/SKILL.md --apply
 
-# AI-assisted instruction refactoring via CLI
+# AI-assisted instruction refactoring (uses config.json defaults or explicit flags)
 skill-inspector fix path/to/SKILL.md --llm --apply
 
-# Profile execution trajectory trace against baseline steps
+# Profile execution trajectory trace against baseline steps (or configured default)
+skill-inspector profile path/to/trace.json
 skill-inspector profile path/to/trace.json --baseline 3
 
-# Generate synthetic test scenario matrix & export to Pytest
+# Generate synthetic test scenario matrix & export to Pytest (defaults to config.json count & format)
+skill-inspector generate-tests path/to/SKILL.md
 skill-inspector generate-tests path/to/SKILL.md --format pytest --output tests/test_skill.py
 ```
 
