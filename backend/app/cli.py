@@ -5,6 +5,7 @@ Command-line companion for validating, auto-fixing, profiling, and generating te
 from __future__ import annotations
 
 import json
+import os
 from app import __version__
 from pathlib import Path
 from typing import Optional
@@ -15,6 +16,7 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 import asyncio
 
+from app.config import load_config, init_default_config, CONFIG_FILE, CLIConfig
 from app.parser import parse_skill_md, ParseError
 from app.package import resolve_skill_package, ReferenceFileStatus, SkillPackage
 from app.validators.static import run_static_validation
@@ -36,6 +38,25 @@ def version_callback(value: bool):
         typer.echo(f"skill-inspector cli version: {__version__}")
         raise typer.Exit()
 
+def resolve_llm_credentials(
+    provider: Optional[str],
+    model: Optional[str],
+    api_key: Optional[str],
+    cfg: CLIConfig,
+) -> tuple[str, str, Optional[str]]:
+    """Resolve provider, model, and API key using CLI flags, config.json, and env vars."""
+    resolved_provider = provider or cfg.llm.default_provider or "openai"
+    resolved_model = model or cfg.llm.default_model or "gpt-4o"
+    
+    # Priority: explicit flag -> config api_keys[provider] -> env var (e.g. OPENAI_API_KEY)
+    resolved_api_key = (
+        api_key
+        or cfg.llm.api_keys.get(resolved_provider)
+        or os.getenv(f"{resolved_provider.upper()}_API_KEY")
+    )
+    return resolved_provider, resolved_model, resolved_api_key
+
+
 @app.callback()
 def root_callback(
     version: bool = typer.Option(
@@ -49,14 +70,15 @@ def root_callback(
 def validate_command(
     file: Path = typer.Argument(..., help="Path to SKILL.md file", exists=True),
     base_dir: Optional[Path] = typer.Option(
-        None, "--base-dir", "-d", help="Base directory of the skill package (defaults to parent folder of SKILL.md)"
+        None, "--base-dir", "-d", help="Base directory of the skill package (defaults to parent folder of SKILL.md or config.json)"
     ),
     llm: bool = typer.Option(False, "--llm", help="Also run LLM-as-a-Judge validation"),
-    provider: str = typer.Option("openai", "--provider", help="LLM provider (openai, anthropic, ollama)"),
-    model: str = typer.Option("gpt-4o", "--model", help="LLM model name"),
+    provider: Optional[str] = typer.Option(None, "--provider", help="LLM provider (openai, anthropic, ollama)"),
+    model: Optional[str] = typer.Option(None, "--model", help="LLM model name"),
     api_key: Optional[str] = typer.Option(None, "--api-key", help="API key for provider"),
 ):
     """Run structural and quality validation on a SKILL.md file."""
+    cli_cfg = load_config()
     content = file.read_text(encoding="utf-8")
     console.print(f"\n[bold cyan]Validating:[/] {file.resolve()}")
 
@@ -66,7 +88,8 @@ def validate_command(
         console.print(f"[bold red]Parse Error:[/] {exc.message}")
         raise typer.Exit(code=1)
 
-    resolved_base = (base_dir or file.parent).resolve()
+    configured_base = Path(cli_cfg.validation.base_dir) if cli_cfg.validation.base_dir else None
+    resolved_base = (base_dir or configured_base or file.parent).resolve()
     pkg: Optional[SkillPackage] = None
     if resolved_base.is_dir():
         try:
@@ -142,8 +165,9 @@ def validate_command(
         console.print(Panel(summary_text, title="Skill Token Estimate", border_style="cyan"))
 
     if llm:
-        console.print(f"\n[bold cyan]Running LLM Judge ({provider}:{model})...[/]")
-        cfg = ProviderConfig(provider=provider, model=model, api_key=api_key)  # type: ignore
+        prov, mdl, key = resolve_llm_credentials(provider, model, api_key, cli_cfg)
+        console.print(f"\n[bold cyan]Running LLM Judge ({prov}:{mdl})...[/]")
+        cfg = ProviderConfig(provider=prov, model=mdl, api_key=key)  # type: ignore
         llm_report = asyncio.run(run_llm_validation(doc, cfg))
 
         llm_table = Table(title=f"LLM Judge Evaluation (Overall Score: {llm_report.overall_score}/100)")
@@ -173,11 +197,12 @@ def fix_command(
     safe_only: bool = typer.Option(True, "--safe/--all", help="Apply only safe deterministic repairs"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Display unified diff without changing file"),
     llm_refactor: bool = typer.Option(False, "--llm", help="Use LLM to refactor ambiguous instructions"),
-    provider: str = typer.Option("openai", "--provider", help="LLM provider for refactor"),
-    model: str = typer.Option("gpt-4o", "--model", help="LLM model name"),
+    provider: Optional[str] = typer.Option(None, "--provider", help="LLM provider for refactor"),
+    model: Optional[str] = typer.Option(None, "--model", help="LLM model name"),
     api_key: Optional[str] = typer.Option(None, "--api-key", help="API key for provider"),
 ):
     """Automatically repair frontmatter schema errors and refactor instructions."""
+    cli_cfg = load_config()
     content = file.read_text(encoding="utf-8")
     console.print(f"\n[bold cyan]Analyzing & Repairing:[/] {file.resolve()}")
 
@@ -187,9 +212,10 @@ def fix_command(
     repaired_text = result.repaired_content
 
     if llm_refactor:
-        console.print(f"[bold cyan]Running LLM Refactor ({provider}:{model})...[/]")
+        prov, mdl, key = resolve_llm_credentials(provider, model, api_key, cli_cfg)
+        console.print(f"[bold cyan]Running LLM Refactor ({prov}:{mdl})...[/]")
         llm_engine = LLMRepairEngine()
-        cfg = ProviderConfig(provider=provider, model=model, api_key=api_key)  # type: ignore
+        cfg = ProviderConfig(provider=prov, model=mdl, api_key=key)  # type: ignore
         refactor_res = asyncio.run(llm_engine.refactor(repaired_text, cfg))
         repaired_text = refactor_res.refactored_content
         # Recompute diff against original
@@ -222,10 +248,20 @@ def profile_command(
     base_dir: Optional[Path] = typer.Option(None, "--base-dir", "-d", help="Path to skill package root directory"),
 ):
     """Profile agent execution path against baselines, flagging redundancy and token bloat."""
+    cli_cfg = load_config()
     trace_raw = trace_file.read_text(encoding="utf-8")
     skill_content = skill_file.read_text(encoding="utf-8") if skill_file else None
 
-    resolved_base_dir = base_dir
+    # Resolve baseline from flag or config
+    effective_baseline = baseline
+    if effective_baseline is None and cli_cfg.profiler.default_baseline_steps is not None:
+        try:
+            effective_baseline = int(cli_cfg.profiler.default_baseline_steps)
+        except ValueError:
+            pass
+
+    configured_base = Path(cli_cfg.validation.base_dir) if cli_cfg.validation.base_dir else None
+    resolved_base_dir = base_dir or configured_base
     if resolved_base_dir is None and skill_file is not None:
         resolved_base_dir = skill_file.parent.resolve()
 
@@ -233,7 +269,7 @@ def profile_command(
     report = profiler.profile(
         trace_raw,
         skill_content=skill_content,
-        custom_baseline_steps=baseline,
+        custom_baseline_steps=effective_baseline,
         base_dir=str(resolved_base_dir) if resolved_base_dir else None,
     )
 
@@ -303,32 +339,37 @@ def profile_command(
 def generate_tests_command(
     file: Path = typer.Argument(..., help="Path to SKILL.md file", exists=True),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Destination file for generated test suite"),
-    format: str = typer.Option("json", "--format", "-f", help="Output format: json, pytest, markdown"),
-    count: int = typer.Option(12, "--count", "-c", help="Number of scenarios to generate"),
+    format: Optional[str] = typer.Option(None, "--format", "-f", help="Output format: json, pytest, markdown"),
+    count: Optional[int] = typer.Option(None, "--count", "-c", help="Number of scenarios to generate"),
     provider: Optional[str] = typer.Option(None, "--provider", help="LLM provider (openai, anthropic, ollama)"),
     model: Optional[str] = typer.Option(None, "--model", help="LLM model name"),
     api_key: Optional[str] = typer.Option(None, "--api-key", help="API key for provider"),
 ):
     """Generate 10–20 realistic synthetic test scenarios (Happy Path, Adversarial, Tool Failure)."""
+    cli_cfg = load_config()
     content = file.read_text(encoding="utf-8")
     console.print(f"\n[bold cyan]Generating Synthetic Test Scenarios for:[/] {file.name}")
 
+    target_format = format or cli_cfg.scenarios.default_format or "json"
+    target_count = count if count is not None else cli_cfg.scenarios.default_count
+
     cfg = None
-    if provider and model:
-        cfg = ProviderConfig(provider=provider, model=model, api_key=api_key)  # type: ignore
+    if provider or model or api_key:
+        prov, mdl, key = resolve_llm_credentials(provider, model, api_key, cli_cfg)
+        cfg = ProviderConfig(provider=prov, model=mdl, api_key=key)  # type: ignore
 
     generator = ScenarioGenerator()
-    suite = asyncio.run(generator.generate(content, config=cfg, count=count))
+    suite = asyncio.run(generator.generate(content, config=cfg, count=target_count))
 
     console.print(f"[bold green]✓ Generated {suite.total_scenarios} scenarios:[/]")
     for cat, num in suite.categories_breakdown.items():
         console.print(f"  • {cat.replace('_', ' ').title()}: [bold]{num}[/]")
 
     # Format output
-    if format == "pytest":
+    if target_format == "pytest":
         formatted_output = export_as_pytest(suite)
         ext = ".py"
-    elif format == "markdown":
+    elif target_format == "markdown":
         formatted_output = export_as_markdown(suite)
         ext = ".md"
     else:
@@ -353,6 +394,26 @@ def help_command():
     """Show help message."""
     console.print(f"Skill Inspector Version: [bold green]{__version__}[/]")
     console.print(f"Use [bold]--help[/bold] for more information.")
+
+@app.command("config")
+def config_command(
+    init: bool = typer.Option(False, "--init", help="Initialize ~/.skill-inspector/config.json with default settings"),
+    path: bool = typer.Option(False, "--path", help="Show path to configuration file"),
+    ):
+    """View or initialize Skill Inspector CLI Conifiguration."""
+    if path:
+        console.print(f"Config path: [bold cyan]{CONFIG_FILE.resolve()}[/]")
+        return
+
+    if init:
+        target = init_default_config(overwrite=True)
+        console.print(f"[bold green] Initialised configuration file at: [/]{target.resolve()}")
+        return
+
+    # Default: Show active config
+    cfg = load_config()
+    console.print(f"[bold cyan]Configuration File:[/] {CONFIG_FILE.resolve()} {'[green](found)[/]' if CONFIG_FILE.exists() else '[yellow](<using defaults>)[/]'}")
+    console.print_json(cfg.model_dump_json(indent=2))
 
 def main():
     app()

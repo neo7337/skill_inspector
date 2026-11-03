@@ -81,3 +81,14 @@ See [docs/guide.md](docs/guide.md).
     assert "Reference Coverage" in result.stdout
     assert "Undeclared File Accesses" in result.stdout
 
+
+def test_cli_config_commands():
+    result = runner.invoke(app, ["config", "--path"])
+    assert result.exit_code == 0
+    assert "Config path:" in result.stdout
+
+    result = runner.invoke(app, ["config"])
+    assert result.exit_code == 0
+    assert "Configuration File:" in result.stdout
+
+
