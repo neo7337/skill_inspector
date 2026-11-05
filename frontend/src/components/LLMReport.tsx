@@ -67,10 +67,10 @@ export function LLMReport({
     return (
       <div className="space-y-4">
         {tokenCard}
-        <div className="flex flex-col items-center justify-center py-12 px-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white/60 dark:bg-slate-900/40 backdrop-blur-md text-center space-y-3">
+        <div className="flex flex-col items-center justify-center py-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center space-y-3">
           <div className="relative flex items-center justify-center">
-            <div className="w-10 h-10 rounded-full border-2 border-violet-500/20 border-t-violet-500 animate-spin" />
-            <div className="absolute w-2 h-2 rounded-full bg-violet-500 animate-ping" />
+            <div className="w-10 h-10 rounded-full border-2 border-blue-500/20 border-t-blue-600 animate-spin" />
+            <div className="absolute w-2 h-2 rounded-full bg-blue-600 animate-ping" />
           </div>
           <div>
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
@@ -113,7 +113,7 @@ export function LLMReport({
       <div className="space-y-4">
         {tokenCard}
         <div className="flex flex-col items-center justify-center py-12 px-6 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/20 text-center select-none">
-          <div className="w-12 h-12 rounded-2xl bg-violet-500/10 dark:bg-violet-500/20 border border-violet-500/20 flex items-center justify-center text-violet-500 dark:text-violet-400 mb-3 shadow-glow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 flex items-center justify-center text-blue-600 dark:text-blue-400 mb-3">
             ✨
           </div>
           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
@@ -134,7 +134,7 @@ export function LLMReport({
       {tokenCard}
 
       {/* Summary Card */}
-      <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 shadow-xs backdrop-blur-md flex flex-col sm:flex-row items-center gap-5">
+      <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-card flex flex-col sm:flex-row items-center gap-5">
         <OverallScoreRing score={result.overall_score} size="md" />
 
         <div className="flex-1 text-center sm:text-left space-y-1.5 min-w-0">
@@ -143,7 +143,7 @@ export function LLMReport({
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">
               LLM Judge Evaluation
             </h2>
-            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20 truncate">
+            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full badge-brand truncate">
               {result.provider_used} / {result.model_used}
             </span>
           </div>
@@ -156,7 +156,7 @@ export function LLMReport({
       </div>
 
       {/* Dimension Score Bars Card */}
-      <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 shadow-xs backdrop-blur-md space-y-3">
+      <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-card space-y-3">
         <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
           Dimension Scores
         </h3>
@@ -180,7 +180,7 @@ export function LLMReport({
           return (
             <div
               key={dim}
-              className="rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900/60 overflow-hidden shadow-xs backdrop-blur-sm transition-all duration-200"
+              className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-xs transition-all duration-200"
             >
               <button
                 type="button"
@@ -242,7 +242,7 @@ export function LLMReport({
                   {/* Suggestions & Code Snippet Action Cards */}
                   {d.suggestions.length > 0 && (
                     <div className="space-y-2.5">
-                      <h4 className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                      <h4 className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
                         Recommendations & Concrete Improvements
                       </h4>
                       <div className="space-y-3">
@@ -256,10 +256,10 @@ export function LLMReport({
                           return (
                             <div
                               key={i}
-                              className="p-3.5 rounded-xl border border-indigo-200/60 dark:border-indigo-900/40 bg-indigo-50/40 dark:bg-indigo-950/20 space-y-2.5"
+                              className="p-3.5 rounded-xl border border-blue-200/60 dark:border-blue-900/40 bg-blue-50/40 dark:bg-blue-950/20 space-y-2.5"
                             >
                               <div className="flex items-start gap-2 text-xs leading-relaxed text-slate-800 dark:text-slate-200">
-                                <span className="text-indigo-500 dark:text-indigo-400 font-bold shrink-0 mt-0.5">
+                                <span className="text-blue-500 dark:text-blue-400 font-bold shrink-0 mt-0.5">
                                   💡
                                 </span>
                                 <span className="flex-1">{suggestionText}</span>
@@ -303,7 +303,7 @@ export function LLMReport({
                                             snippet: suggestionExample,
                                           })
                                         }
-                                        className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+                                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
                                         title="Append this section directly to the editor markdown"
                                       >
                                         <span>+</span>

@@ -4,22 +4,32 @@
 
 @layer base {
   :root {
-    --surface-base: #f8fafc;
-    --surface-raised: #ffffff;
+    /* Light-first surfaces */
+    --surface-base:    #ffffff;
+    --surface-raised:  #f8fafc;
     --surface-overlay: #f1f5f9;
-    --surface-sunken: #eef2f6;
-    --border-subtle: #e2e8f0;
-    --border-muted: #cbd5e1;
+    --surface-sunken:  #e8edf3;
+    --border-subtle:   #e2e8f0;
+    --border-muted:    #cbd5e1;
+    /* Brand accent */
+    --accent:          #2563eb;
+    --accent-hover:    #1d4ed8;
+    --accent-subtle:   #eff6ff;
+    --accent-muted:    #bfdbfe;
   }
 
   html.dark,
   .dark {
-    --surface-base: #090d16;
-    --surface-raised: #0f172a;
-    --surface-overlay: #1e293b;
-    --surface-sunken: #050811;
-    --border-subtle: #1e293b;
-    --border-muted: #334155;
+    --surface-base:    #0f172a;
+    --surface-raised:  #1e293b;
+    --surface-overlay: #263348;
+    --surface-sunken:  #0a1120;
+    --border-subtle:   #1e293b;
+    --border-muted:    #334155;
+    --accent:          #3b82f6;
+    --accent-hover:    #60a5fa;
+    --accent-subtle:   #1e3a5f;
+    --accent-muted:    #1e40af;
   }
 
   body {
@@ -62,43 +72,35 @@
     background: rgba(100, 116, 139, 0.7);
   }
 
-  /* Glassmorphism panels */
-  .glass-panel {
-    @apply bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 shadow-sm;
+  /* Clean card surface — replaces glassmorphism panels */
+  .card {
+    @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-card rounded-2xl;
   }
 
-  .glass-panel-elevated {
-    @apply bg-white/90 dark:bg-slate-900/90 backdrop-blur-lg border border-slate-200/90 dark:border-slate-800/90 shadow-md;
+  .card-raised {
+    @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-md rounded-2xl;
   }
 
-  .glass-card {
-    @apply bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm border border-slate-200/60 dark:border-slate-800/60;
+  /* Status badges — border + background tint, no glow */
+  .badge-brand {
+    @apply bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-200 dark:border-blue-800;
   }
 
-  /* Glow badges & accents */
-  .glow-badge {
-    @apply relative inline-flex items-center transition-all duration-200;
+  .badge-emerald {
+    @apply bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800;
   }
 
-  .glow-badge-violet {
-    @apply bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20 shadow-glow-sm;
+  .badge-amber {
+    @apply bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800;
   }
 
-  .glow-badge-emerald {
-    @apply bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.2)];
+  .badge-rose {
+    @apply bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-800;
   }
 
-  .glow-badge-amber {
-    @apply bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.2)];
-  }
-
-  .glow-badge-rose {
-    @apply bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20 shadow-[0_0_10px_rgba(244,63,94,0.2)];
-  }
-
-  /* Gradient text */
-  .text-gradient-ai {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 dark:from-violet-400 dark:via-indigo-300 dark:to-cyan-400;
+  /* Brand text — solid, no gradient */
+  .text-brand {
+    @apply text-blue-600 dark:text-blue-400;
   }
 
   /* Shimmer effect helper */
@@ -112,4 +114,3 @@
     background-size: 200% 100%;
   }
 }
-

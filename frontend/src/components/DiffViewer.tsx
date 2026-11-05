@@ -250,15 +250,15 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
       )}
 
       {/* High-Contrast Code / Diff Container */}
-      <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-950 text-slate-100 overflow-hidden shadow-md font-mono text-xs">
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 overflow-hidden shadow-xs dark:shadow-md font-mono text-xs">
         {/* Diff Top Toolbar */}
-        <div className="flex items-center justify-between px-4 py-2.5 bg-slate-900/90 border-b border-slate-800">
+        <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/80 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-3">
-            <span className="font-bold text-slate-200 text-xs">Unified Diff</span>
+            <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">Unified Diff</span>
             {activeDiff?.has_changes && (
               <div className="flex items-center gap-2 text-[11px]">
-                <span className="text-emerald-400 font-bold">+{activeDiff.additions_count}</span>
-                <span className="text-rose-400 font-bold">-{activeDiff.deletions_count}</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold">+{activeDiff.additions_count}</span>
+                <span className="text-rose-600 dark:text-rose-400 font-bold">-{activeDiff.deletions_count}</span>
               </div>
             )}
           </div>
@@ -268,7 +268,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
               type="button"
               onClick={handleCopyDiff}
               disabled={!activeDiff?.unified_diff}
-              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-medium border border-slate-700 disabled:opacity-40 transition-colors flex items-center gap-1 active:scale-95"
+              className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-medium border border-slate-200 dark:border-slate-700 shadow-xs disabled:opacity-40 transition-colors flex items-center gap-1 active:scale-95"
             >
               <span>{copied ? '✓' : '📋'}</span>
               <span>{copied ? 'Copied' : 'Copy Diff'}</span>
@@ -277,7 +277,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
               type="button"
               onClick={onRefreshPlan}
               disabled={loading}
-              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-medium border border-slate-700 disabled:opacity-40 transition-colors flex items-center gap-1 active:scale-95"
+              className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-medium border border-slate-200 dark:border-slate-700 shadow-xs disabled:opacity-40 transition-colors flex items-center gap-1 active:scale-95"
             >
               <span>↻</span>
               <span>Refresh</span>
@@ -291,15 +291,15 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
             activeDiff.hunks.map((hunk, hunkIdx) => (
               <div
                 key={hunkIdx}
-                className="border border-slate-800/90 rounded-xl bg-slate-900/40 overflow-hidden"
+                className="border border-slate-200 dark:border-slate-800/90 rounded-xl bg-slate-50/40 dark:bg-slate-900/40 shadow-xs dark:shadow-none overflow-hidden"
               >
                 {/* Hunk Header */}
-                <div className="px-3.5 py-1.5 bg-slate-800/60 text-indigo-300 dark:text-indigo-400 text-[11px] select-none border-b border-slate-800/80 font-mono">
+                <div className="px-3.5 py-1.5 bg-indigo-50/70 dark:bg-slate-800/60 text-indigo-700 dark:text-indigo-300 text-[11px] select-none border-b border-indigo-100 dark:border-slate-800/80 font-mono font-medium">
                   {hunk.header}
                 </div>
 
                 {/* Hunk Lines */}
-                <div className="divide-y divide-slate-900/50">
+                <div className="divide-y divide-slate-100 dark:divide-slate-900/50">
                   {hunk.lines.map((line, lIdx) => {
                     const isAdd = line.type === 'add'
                     const isDel = line.type === 'del'
@@ -309,26 +309,30 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
                         key={lIdx}
                         className={`flex items-start px-2 sm:px-3 py-1 leading-relaxed transition-colors ${
                           isAdd
-                            ? 'bg-emerald-950/40 text-emerald-300 border-l-2 border-emerald-500'
+                            ? 'bg-emerald-50 text-emerald-900 border-l-2 border-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-300'
                             : isDel
-                            ? 'bg-rose-950/40 text-rose-300 border-l-2 border-rose-500'
-                            : 'text-slate-400 hover:bg-slate-900/40 border-l-2 border-transparent'
+                            ? 'bg-rose-50 text-rose-900 border-l-2 border-rose-500 dark:bg-rose-950/40 dark:text-rose-300'
+                            : 'text-slate-600 hover:bg-slate-100/60 dark:text-slate-400 dark:hover:bg-slate-900/40 border-l-2 border-transparent'
                         }`}
                       >
                         {/* Old Line Number */}
-                        <span className="w-9 sm:w-10 select-none text-right pr-2 sm:pr-3 text-slate-600 shrink-0 font-mono text-[11px]">
+                        <span className="w-9 sm:w-10 select-none text-right pr-2 sm:pr-3 text-slate-400 dark:text-slate-600 shrink-0 font-mono text-[11px]">
                           {line.line_number_old || ''}
                         </span>
 
                         {/* New Line Number */}
-                        <span className="w-9 sm:w-10 select-none text-right pr-2 sm:pr-3 text-slate-600 shrink-0 font-mono text-[11px]">
+                        <span className="w-9 sm:w-10 select-none text-right pr-2 sm:pr-3 text-slate-400 dark:text-slate-600 shrink-0 font-mono text-[11px]">
                           {line.line_number_new || ''}
                         </span>
 
                         {/* Sign Indicator */}
                         <span
                           className={`w-4 select-none font-bold shrink-0 ${
-                            isAdd ? 'text-emerald-400' : isDel ? 'text-rose-400' : 'text-slate-600'
+                            isAdd
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : isDel
+                              ? 'text-rose-600 dark:text-rose-400'
+                              : 'text-slate-300 dark:text-slate-600'
                           }`}
                         >
                           {isAdd ? '+' : isDel ? '-' : ' '}
@@ -345,21 +349,21 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
               </div>
             ))
           ) : (
-            <div className="py-14 text-center text-slate-400 select-none space-y-2">
+            <div className="py-14 text-center text-slate-500 dark:text-slate-400 select-none space-y-2">
               {loading ? (
                 <div className="flex flex-col items-center justify-center gap-3">
                   <div className="w-8 h-8 rounded-full border-2 border-indigo-500/20 border-t-indigo-500 animate-spin" />
-                  <span className="text-xs">Computing diff and repair plan…</span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">Computing diff and repair plan…</span>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-base">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-base">
                     ✓
                   </div>
-                  <p className="text-xs font-semibold text-slate-200">
+                  <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
                     SKILL.md is Clean & Valid
                   </p>
-                  <p className="text-[11px] text-slate-500 max-w-sm">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-sm">
                     No schema repairs or automatic diff changes required for this skill.
                   </p>
                 </div>

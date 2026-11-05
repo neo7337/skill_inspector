@@ -85,9 +85,9 @@ function Toast({ toasts, onDismiss }: { toasts: ToastState[]; onDismiss: (id: nu
           },
           info: {
             wrapper:
-              'bg-slate-900/90 dark:bg-slate-900/95 text-slate-100 border-indigo-500/40 shadow-[0_8px_24px_rgba(99,102,241,0.2)]',
+              'bg-slate-900/90 dark:bg-slate-900/95 text-slate-100 border-blue-500/40 shadow-[0_8px_24px_rgba(37,99,235,0.2)]',
             icon: (
-              <svg className="w-4 h-4 text-indigo-400 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <svg className="w-4 h-4 text-blue-400 shrink-0" viewBox="0 0 20 20" fill="currentColor">
                 <path
                   fillRule="evenodd"
                   d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.247.25v3.25a.75.75 0 001.5 0v-3.5A1.75 1.75 0 009.25 9H9z"
@@ -415,16 +415,16 @@ export default function App() {
   const isDark = theme === 'dark'
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-slate-50 dark:bg-[#070b12] text-slate-900 dark:text-slate-100 transition-colors duration-200">
+    <div className="h-screen flex flex-col overflow-hidden bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
       {/* Header */}
-      <header className="shrink-0 z-40 px-5 sm:px-6 py-3 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl flex items-center justify-between shadow-xs transition-colors duration-200">
+      <header className="shrink-0 z-40 px-5 sm:px-6 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between shadow-sm transition-colors duration-200">
         {/* Brand Mark */}
         <div className="flex items-center gap-3 select-none">
           <div className="relative group flex items-center justify-center">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-cyan-500 p-[1px] shadow-glow-sm transition-transform duration-300 group-hover:scale-105">
-              <div className="w-full h-full bg-white dark:bg-slate-950 rounded-[11px] flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shadow-sm transition-transform duration-300 group-hover:scale-105">
+              <div className="w-full h-full rounded-xl flex items-center justify-center">
                 <svg
-                  className="w-5 h-5 text-indigo-600 dark:text-indigo-400"
+                  className="w-5 h-5 text-white"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -443,7 +443,7 @@ export default function App() {
               <h1 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">
                 Skill Inspector
               </h1>
-              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full badge-brand">
                 agentskills.io
               </span>
             </div>
@@ -457,13 +457,13 @@ export default function App() {
         <div className="flex items-center gap-3">
           <div
             className={`
-              inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border backdrop-blur-md transition-all duration-300
+              inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-300
               ${
                 backendStatus === 'ok'
-                  ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
+                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
                   : backendStatus === 'error'
-                  ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/25 shadow-[0_0_12px_rgba(244,63,94,0.15)]'
-                  : 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20'
+                  ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border-rose-200 dark:border-rose-800'
+                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700'
               }
             `}
             title={
@@ -502,7 +502,7 @@ export default function App() {
       </header>
 
       {/* Base Directory Toolbar */}
-      <div className="shrink-0 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/75 dark:bg-[#090e1c]/75 backdrop-blur-md px-6 py-2 flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-6 py-2 flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-3 flex-1 min-w-[320px]">
           <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium shrink-0">
             <svg className="w-4 h-4 text-indigo-500 dark:text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -521,7 +521,7 @@ export default function App() {
                 }
               }}
               placeholder="/absolute/path/to/skill-package (e.g. ./samples/valid-skill)"
-              className="w-full px-3 py-1.5 pl-8 text-xs font-mono rounded-lg border border-slate-200/90 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-900/80 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all shadow-inner"
+              className="w-full px-3 py-1.5 pl-8 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all shadow-inner"
             />
             <span className="absolute left-2.5 top-2 text-slate-400 dark:text-slate-500 select-none">
               📁
@@ -546,7 +546,7 @@ export default function App() {
             type="button"
             onClick={() => handleScanPackage()}
             disabled={baseDirStatus === 'scanning' || !baseDir.trim()}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm flex items-center gap-1.5 transition-all active:scale-95"
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm flex items-center gap-1.5 transition-all active:scale-95"
             title="Scan base directory for skill package and referenced files"
           >
             {baseDirStatus === 'scanning' ? (
@@ -571,7 +571,7 @@ export default function App() {
         {/* Status Pill */}
         <div className="flex items-center gap-2">
           {baseDirStatus === 'ready' && packageSummary && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium badge-emerald">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
               <span className="font-semibold">Package Ready</span>
               <span className="text-emerald-600/70 dark:text-emerald-400/70 font-mono">
@@ -580,20 +580,20 @@ export default function App() {
             </div>
           )}
           {baseDirStatus === 'unresolved' && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/25">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium badge-amber">
               <span className="w-2 h-2 rounded-full bg-amber-500"></span>
               <span className="font-semibold">Directory Unresolved</span>
               <span className="text-amber-600/70 dark:text-amber-400/70">(Check path exists & accessible)</span>
             </div>
           )}
           {baseDirStatus === 'scanning' && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/25">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium badge-brand">
               <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse"></span>
               <span className="font-semibold">Scanning Directory…</span>
             </div>
           )}
           {baseDirStatus === 'idle' && (
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
               <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
               <span>No package attached (attach directory to resolve on-disk references)</span>
             </div>
@@ -604,14 +604,14 @@ export default function App() {
       {/* Main layout */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left: Editor Workspace */}
-        <div className="w-1/2 flex flex-col min-h-0 border-r border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#070b14]">
+        <div className="w-1/2 flex flex-col min-h-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
           {/* Editor toolbar */}
-          <div className="shrink-0 px-4 py-2.5 border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-50/70 dark:bg-[#090e1c]/70 backdrop-blur-sm flex items-center justify-between">
+          <div className="shrink-0 px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between">
             {/* Breadcrumb Chip */}
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 text-slate-700 dark:text-slate-300 text-xs font-mono font-medium shadow-xs">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-mono font-medium shadow-xs">
                 <svg
-                  className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 shrink-0"
+                  className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -655,7 +655,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('repair')}
-                  className="px-3 py-1 rounded-md text-xs font-semibold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-glow-emerald flex items-center gap-1.5 transition-all duration-200 animate-pulse active:scale-95"
+                  className="px-3 py-1 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-1.5 transition-all duration-200 animate-pulse active:scale-95"
                   title="View proposed fixes in Diff & Repair tab"
                 >
                   <span>✨ Auto-Fix ({repairPlan.repairs_applied.length})</span>
@@ -688,7 +688,7 @@ export default function App() {
           </div>
 
           {/* Textarea Editor Container */}
-          <div className="flex-1 min-h-0 relative bg-white dark:bg-[#070b14]">
+          <div className="flex-1 min-h-0 relative bg-white dark:bg-slate-950">
             <textarea
               value={content}
               onChange={e => setContent(e.target.value)}
@@ -698,7 +698,7 @@ export default function App() {
                 absolute inset-0 w-full h-full text-sm font-mono
                 p-5 resize-none focus:outline-none scrollbar-thin overflow-y-auto
                 leading-relaxed transition-all duration-300
-                bg-transparent text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600
+                bg-transparent text-slate-900 dark:text-slate-100 placeholder-slate-600 dark:placeholder-slate-400 placeholder:opacity-85
                 ${applyFlash
                   ? 'ring-2 ring-emerald-500/80 dark:ring-emerald-400/80 bg-emerald-500/5 shadow-[0_0_24px_rgba(16,185,129,0.2)]'
                   : ''
@@ -708,7 +708,7 @@ export default function App() {
           </div>
 
           {/* Editor Stats Bar with Token Gauge */}
-          <div className="shrink-0 px-4 py-2 border-t border-slate-200/80 dark:border-slate-800/80 bg-slate-50/70 dark:bg-[#090e1c]/70 backdrop-blur-sm flex items-center justify-between text-xs select-none">
+          <div className="shrink-0 px-4 py-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between text-xs select-none">
             <div className="flex items-center gap-3.5 text-slate-500 dark:text-slate-400 font-mono text-[11px]">
               <span>{content.length.toLocaleString()} chars</span>
               <span className="text-slate-300 dark:text-slate-700">•</span>
@@ -764,17 +764,17 @@ export default function App() {
         </div>
 
         {/* Right: Report Panel */}
-        <div className="w-1/2 flex flex-col min-h-0 bg-slate-50/50 dark:bg-[#070b12]/50">
+        <div className="w-1/2 flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950">
           {/* Segmented Tab Bar */}
-          <div className="shrink-0 px-3.5 py-2 border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-100/50 dark:bg-[#090e1c]/50 backdrop-blur-md flex items-center gap-1.5 overflow-x-auto scrollbar-thin">
+          <div className="shrink-0 px-3.5 py-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-1.5 overflow-x-auto scrollbar-thin">
             <button
               type="button"
               onClick={() => setActiveTab('static')}
               className={`
                 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center gap-2 select-none
                 ${activeTab === 'static'
-                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700/80'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 border border-transparent'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
                 }
               `}
             >
@@ -798,8 +798,8 @@ export default function App() {
               className={`
                 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center gap-2 select-none
                 ${activeTab === 'llm'
-                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700/80'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 border border-transparent'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
                 }
               `}
             >
@@ -829,14 +829,14 @@ export default function App() {
               className={`
                 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center gap-2 select-none
                 ${activeTab === 'repair'
-                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700/80'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 border border-transparent'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
                 }
               `}
             >
               <span>Diff & Repair</span>
               {repairPlan?.diff.has_changes && (
-                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold badge-emerald">
                   {repairPlan.repairs_applied.length}
                 </span>
               )}
@@ -849,13 +849,13 @@ export default function App() {
                 className={`
                   px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center gap-2 select-none
                   ${activeTab === 'scenarios'
-                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700/80'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 border border-transparent'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }
                 `}
               >
                 <span>Synthetic Tests</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 font-semibold">
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md badge-brand font-semibold">
                   Beta
                 </span>
               </button>
@@ -868,13 +868,13 @@ export default function App() {
                 className={`
                   px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center gap-2 select-none
                   ${activeTab === 'profiler'
-                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700/80'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 border border-transparent'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }
                 `}
               >
                 <span>Trajectory Profiler</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 font-semibold">
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md badge-brand font-semibold">
                   Beta
                 </span>
               </button>

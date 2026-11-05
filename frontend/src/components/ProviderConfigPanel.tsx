@@ -65,7 +65,7 @@ export function ProviderConfigPanel({
   const currentProvider = PROVIDER_METADATA[config.provider]
 
   return (
-    <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900/80 shadow-xs backdrop-blur-md overflow-hidden transition-all duration-200">
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-card overflow-hidden transition-all duration-200">
       {/* Collapsible Header */}
       <button
         type="button"
@@ -74,7 +74,7 @@ export function ProviderConfigPanel({
         aria-expanded={isOpen}
       >
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white text-sm shadow-glow-sm shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white text-sm shadow-sm shrink-0">
             {currentProvider.icon}
           </div>
 
@@ -83,7 +83,7 @@ export function ProviderConfigPanel({
               <span className="text-sm font-bold text-slate-900 dark:text-white">
                 LLM Judge Configuration
               </span>
-              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20">
+              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full badge-brand">
                 {currentProvider.label}
               </span>
             </div>
@@ -140,8 +140,8 @@ export function ProviderConfigPanel({
                       py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 select-none
                       ${
                         isSelected
-                          ? 'bg-white dark:bg-violet-600 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-violet-500'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/60'
+                          ? 'bg-white dark:bg-blue-600 text-slate-900 dark:text-white shadow-xs border border-slate-200 dark:border-blue-500'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60'
                       }
                     `}
                   >
@@ -166,7 +166,7 @@ export function ProviderConfigPanel({
               value={config.model}
               onChange={e => onChange({ ...config, model: e.target.value })}
               placeholder={DEFAULT_MODELS[config.provider]}
-              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/25 focus:border-violet-500 transition-all"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 transition-all"
             />
           </div>
 
@@ -182,7 +182,7 @@ export function ProviderConfigPanel({
                   value={config.api_key}
                   onChange={e => onChange({ ...config, api_key: e.target.value })}
                   placeholder="sk-..."
-                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 pr-16 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/25 focus:border-violet-500 transition-all"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 pr-16 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 transition-all"
                 />
                 <button
                   type="button"
@@ -209,7 +209,7 @@ export function ProviderConfigPanel({
                 value={config.base_url}
                 onChange={e => onChange({ ...config, base_url: e.target.value })}
                 placeholder="http://localhost:11434"
-                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/25 focus:border-violet-500 transition-all"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 transition-all"
               />
               <p className="text-[11px] text-slate-400 dark:text-slate-500">
                 Ollama server address. Default: http://localhost:11434
@@ -232,7 +232,7 @@ export function ProviderConfigPanel({
             onClick={onRun}
             disabled={isRunning || disabled}
             className="w-full py-2.5 px-4 rounded-xl font-semibold text-xs transition-all duration-200
-              bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 hover:from-violet-500 hover:via-indigo-500 hover:to-cyan-400 text-white shadow-glow-violet
+              bg-blue-600 hover:bg-blue-700 text-white shadow-sm
               active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none
               flex items-center justify-center gap-2"
           >
