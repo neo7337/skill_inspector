@@ -119,8 +119,8 @@ function TreeNode({ node, depth, selectedPath, onSelectSkill, onSelectFile }: Tr
 
 export interface FileTreePanelProps {
   scanResult: ProjectScanResult | null
-  isScanning: boolean
-  scanError: string | null
+  isScanning?: boolean
+  scanError?: string | null
   selectedSkillPath: string | null
   isResolving: boolean
   onSelectSkill: (relativePath: string) => void
@@ -129,8 +129,8 @@ export interface FileTreePanelProps {
 
 export function FileTreePanel({
   scanResult,
-  isScanning,
-  scanError,
+  isScanning = false,
+  scanError = null,
   selectedSkillPath,
   isResolving,
   onSelectSkill,

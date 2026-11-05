@@ -616,6 +616,8 @@ export default function App() {
         {scanResult && (
           <FileTreePanel
             scanResult={scanResult}
+            isScanning={isScanning}
+            scanError={scanError}
             selectedSkillPath={selectedSkillPath}
             onSelectSkill={(skillPath) => handleSelectSkill(scanResult!.root_dir, skillPath)}
             onSelectFile={(p) => handleSelectFile(p)}
