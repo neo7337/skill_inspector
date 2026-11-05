@@ -1,5 +1,49 @@
 // Types mirroring the FastAPI backend response models
 
+// ── Project / File Tree Types ─────────────────────────────────────────────────
+
+export interface FileTreeNode {
+  name: string
+  path: string            // relative to project root; root node uses "."
+  type: 'file' | 'dir'
+  children?: FileTreeNode[]
+  is_skill_file?: boolean
+  size_bytes?: number | null
+  extension?: string | null
+}
+
+export interface ProjectScanResult {
+  root_dir: string
+  tree: FileTreeNode
+  skill_files: string[]   // relative paths of detected skill files
+  total_files: number
+  total_dirs: number
+  truncated: boolean
+}
+
+export interface ProjectResolveResult {
+  root_dir: string
+  skill_relative_path: string
+  skill_content: string
+  base_dir: string        // skill's own directory — pass as base_dir to validators
+  skill_doc: {
+    name: string | null
+    description: string | null
+    frontmatter: Record<string, unknown>
+    body: string
+  }
+  resolved_files: ResolvedFileReference[]
+  tokens: PackageTokenEconomy
+  missing_files_count: number
+  found_files_count: number
+  validation: {
+    findings: StaticFinding[]
+    overall_status: RuleStatus
+    score: number
+  }
+}
+
+
 export type RuleStatus = 'pass' | 'warn' | 'fail'
 
 export type FixKind = 'frontmatter_field' | 'body_section' | 'text_replace'

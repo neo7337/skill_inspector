@@ -161,7 +161,7 @@ def resolve_file_reference(ref: FileReference, base_dir: Path | str) -> Resolved
         text = target_path.read_text(encoding="utf-8", errors="replace")
         line_count = len(text.splitlines())
         token_count = len(text) // 4
-        preview = text[:1000] if text else ""
+        preview = text[:4000] if text else ""
         return ResolvedFileReference(
             relative_path=ref.path,
             kind=ref.kind,
