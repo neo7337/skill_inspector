@@ -114,3 +114,40 @@
     background-size: 200% 100%;
   }
 }
+
+/* ── Topology View: React Flow overrides ───────────────────────────────────── */
+
+@keyframes dashFlow {
+  to { stroke-dashoffset: -18; }
+}
+
+.animated-dash {
+  animation: dashFlow 1.5s linear infinite;
+}
+
+.dark .react-flow__background {
+  background-color: #020617;
+}
+
+.dark .react-flow__controls button {
+  background: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
+}
+
+.dark .react-flow__controls button:hover {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+.dark .react-flow__minimap {
+  background-color: #0f172a;
+}
+
+.react-flow__node {
+  cursor: default;
+}
+
+.react-flow__node:hover {
+  z-index: 10;
+}

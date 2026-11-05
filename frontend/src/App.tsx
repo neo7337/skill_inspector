@@ -22,6 +22,7 @@ import { ScenarioMatrix } from './components/ScenarioMatrix'
 import { TrajectoryReport } from './components/TrajectoryReport'
 import { ReferenceFileDrawer } from './components/ReferenceFileDrawer'
 import { FileTreePanel } from './components/FileTreePanel'
+import { TopologyView } from './components/TopologyView'
 import { VALID_SKILL_EXAMPLE, BROKEN_SKILL_EXAMPLE } from './examples'
 import { useTheme } from './hooks/useTheme'
 import { applyFix } from './utils/applyFix'
@@ -153,6 +154,7 @@ export default function App() {
   })
 
   const [activeTab, setActiveTab] = useState<'static' | 'llm' | 'repair' | 'scenarios' | 'profiler'>('static')
+  const [mainView, setMainView] = useState<'inspector' | 'topology'>('inspector')
   const [repairPlan, setRepairPlan] = useState<RepairPlanResult | null>(null)
   const [repairLoading, setRepairLoading] = useState(false)
   const [backendStatus, setBackendStatus] = useState<'unknown' | 'ok' | 'error'>('unknown')
@@ -610,6 +612,38 @@ export default function App() {
         )}
       </div>
 
+      {/* View Switcher */}
+      <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-1.5 flex items-center gap-1.5">
+        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mr-2 select-none">View:</span>
+        <button
+          type="button"
+          onClick={() => setMainView('inspector')}
+          className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all duration-200 select-none ${
+            mainView === 'inspector'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          Inspector
+        </button>
+        <button
+          type="button"
+          onClick={() => setMainView('topology')}
+          className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all duration-200 select-none flex items-center gap-1.5 ${
+            mainView === 'topology'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <span>Topology</span>
+          {packageSummary && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md badge-brand font-semibold">
+              {packageSummary.found_files_count + packageSummary.missing_files_count}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* Main layout */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* File Tree Panel — shown when a project is scanned */}
@@ -624,6 +658,8 @@ export default function App() {
             isResolving={isResolving}
           />
         )}
+        {mainView === 'inspector' ? (
+          <>
         {/* Left: Editor Workspace */}
         <div className="w-1/2 flex flex-col min-h-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
           {/* Editor toolbar */}
@@ -987,6 +1023,17 @@ export default function App() {
             )}
           </div>
         </div>
+          </>
+        ) : (
+          <TopologyView
+            packageSummary={packageSummary}
+            selectedSkillPath={selectedSkillPath}
+            skillContent={content}
+            baseDir={baseDir.trim() || undefined}
+            isDark={isDark}
+            onSelectFile={handleSelectFile}
+          />
+        )}
       </div>
 
       {/* Slide-over reference file drawer */}
