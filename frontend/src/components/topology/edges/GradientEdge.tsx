@@ -28,7 +28,7 @@ export function GradientEdge({
   return (
     <>
       <defs>
-        <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
+        <linearGradient id={gradId} gradientUnits="userSpaceOnUse" x1={sourceX} y1={sourceY} x2={targetX} y2={targetY}>
           <stop offset="0%" stopColor={srcColor} stopOpacity="0.8" />
           <stop offset="100%" stopColor={tgtColor} stopOpacity="0.8" />
         </linearGradient>

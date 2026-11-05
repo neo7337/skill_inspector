@@ -8,7 +8,7 @@ export interface ToolCallNodeData {
 }
 
 export function ToolCallNode({ data, selected }: NodeProps) {
-  const d = data as ToolCallNodeData
+  const d = data as unknown as ToolCallNodeData
   const { step } = d
 
   const isRedundant = step.is_redundant

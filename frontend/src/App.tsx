@@ -1028,6 +1028,7 @@ export default function App() {
           <TopologyView
             packageSummary={packageSummary}
             selectedSkillPath={selectedSkillPath}
+            findings={staticResult?.findings}
             skillContent={content}
             baseDir={baseDir.trim() || undefined}
             isDark={isDark}

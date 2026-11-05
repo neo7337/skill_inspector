@@ -64,7 +64,7 @@ function truncatePath(path: string): string {
 }
 
 export function FileNode({ data, selected }: NodeProps) {
-  const d = data as FileNodeData
+  const d = data as unknown as FileNodeData
   const { file } = d
   const kindColor = KIND_COLORS[file.kind] ?? KIND_COLORS.other
   const statusColor = STATUS_DOT[file.status] ?? '#64748b'

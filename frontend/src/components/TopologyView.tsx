@@ -11,20 +11,22 @@ import {
 import '@xyflow/react/dist/style.css'
 import type {
   SkillPackageSummary,
+  StaticFinding,
   TrajectoryProfileReport,
   ResolvedFileReference,
   ReferencedFile,
 } from '../types'
 import { profileTrajectory } from '../api'
-import { SkillNode } from './topology/nodes/SkillNode'
-import { FileNode } from './topology/nodes/FileNode'
+import { FileNode, KIND_COLORS } from './topology/nodes/FileNode'
 import { ToolCallNode } from './topology/nodes/ToolCallNode'
 import { GradientEdge } from './topology/edges/GradientEdge'
-import { KIND_COLORS } from './topology/nodes/FileNode'
+import { PackageGraph } from './topology/PackageGraph'
+import { buildGraph } from './topology/graph/buildGraph'
 
 interface TopologyViewProps {
   packageSummary: SkillPackageSummary | null
   selectedSkillPath: string | null
+  findings?: StaticFinding[]
   skillContent: string
   baseDir?: string
   isDark: boolean
@@ -32,7 +34,6 @@ interface TopologyViewProps {
 }
 
 const nodeTypes = {
-  skillNode: SkillNode,
   fileNode: FileNode,
   toolCallNode: ToolCallNode,
 }
@@ -58,77 +59,10 @@ const SAMPLE_TRACE = {
   ],
 }
 
-function computePackageLayout(
-  summary: SkillPackageSummary,
-  skillPath: string | null,
-  isDark: boolean,
-  onSelectFile: (file: ResolvedFileReference | ReferencedFile | string) => void,
-): { nodes: Node[]; edges: Edge[] } {
-  const CANVAS_CX = 420
-  const SKILL_Y = 60
-  const ROW_GAP = 180
-  const ROW_H = 165
-  const H_GAP = 215
-
-  const nodes: Node[] = []
-  const edges: Edge[] = []
-
-  nodes.push({
-    id: 'skill',
-    type: 'skillNode',
-    position: { x: CANVAS_CX - 130, y: SKILL_Y },
-    data: {
-      skillName: skillPath ?? 'SKILL.md',
-      catalogTokens: summary.tokens.catalog_tokens,
-      activationTokens: summary.tokens.activation_tokens,
-      budgetStatus: summary.tokens.budget_status,
-      resolvedCount: summary.found_files_count,
-      missingCount: summary.missing_files_count,
-      isDark,
-    },
-  })
-
-  const groups: Array<[string, ResolvedFileReference[]]> = [
-    ['reference', summary.resolved_files.filter(f => f.kind === 'reference')],
-    ['script', summary.resolved_files.filter(f => f.kind === 'script')],
-    ['asset', summary.resolved_files.filter(f => f.kind === 'asset')],
-    ['other', summary.resolved_files.filter(f => !['reference', 'script', 'asset'].includes(f.kind))],
-  ]
-
-  let rowIndex = 0
-  for (const [, files] of groups) {
-    if (files.length === 0) continue
-    const rowY = SKILL_Y + ROW_GAP + rowIndex * ROW_H
-    const startX = CANVAS_CX - ((files.length - 1) * H_GAP) / 2 - 95
-    files.forEach((file, i) => {
-      const nodeId = `file-${file.relative_path}`
-      nodes.push({
-        id: nodeId,
-        type: 'fileNode',
-        position: { x: startX + i * H_GAP, y: rowY },
-        data: { file, onSelectFile, isDark },
-      })
-      edges.push({
-        id: `edge-skill-${nodeId}`,
-        source: 'skill',
-        target: nodeId,
-        type: 'gradientEdge',
-        data: {
-          sourceColor: '#3b82f6',
-          targetColor: KIND_COLORS[file.kind] ?? '#64748b',
-          animated: file.status === 'missing',
-        },
-      })
-    })
-    rowIndex++
-  }
-
-  return { nodes, edges }
-}
-
 function computeTrajectoryLayout(
   report: TrajectoryProfileReport,
   isDark: boolean,
+  onSelectFile: (file: ResolvedFileReference | ReferencedFile | string) => void,
 ): { nodes: Node[]; edges: Edge[] } {
   const STEP_X_START = 60
   const STEP_SPACING = 220
@@ -184,6 +118,7 @@ function computeTrajectoryLayout(
             is_binary: false,
           } as ResolvedFileReference,
           isDark,
+          onSelectFile,
         },
       })
       const midStepIndex = Math.floor(totalSteps / 2)
@@ -204,6 +139,7 @@ function computeTrajectoryLayout(
 export function TopologyView({
   packageSummary,
   selectedSkillPath,
+  findings,
   skillContent,
   baseDir,
   isDark,
@@ -215,22 +151,18 @@ export function TopologyView({
   const [traceError, setTraceError] = useState<string | null>(null)
   const [traceLoading, setTraceLoading] = useState(false)
 
-  const { nodes: packageNodes, edges: packageEdges } = useMemo(
-    () => packageSummary
-      ? computePackageLayout(packageSummary, selectedSkillPath, isDark, onSelectFile)
-      : { nodes: [], edges: [] },
-    [packageSummary, selectedSkillPath, isDark, onSelectFile],
-  )
+  const packageCounts = useMemo(() => {
+    const g = buildGraph(packageSummary, findings ?? [])
+    return { nodes: g.nodes.length, edges: g.edges.length }
+  }, [packageSummary, findings])
 
   const { nodes: trajectoryNodes, edges: trajectoryEdges } = useMemo(
     () => trajectoryReport
-      ? computeTrajectoryLayout(trajectoryReport, isDark)
+      ? computeTrajectoryLayout(trajectoryReport, isDark, onSelectFile)
       : { nodes: [], edges: [] },
-    [trajectoryReport, isDark],
+    [trajectoryReport, isDark, onSelectFile],
   )
 
-  const activeNodes = mode === 'package' ? packageNodes : trajectoryNodes
-  const activeEdges = mode === 'package' ? packageEdges : trajectoryEdges
 
   const handleAnalyzeTrace = async () => {
     setTraceError(null)
@@ -260,8 +192,8 @@ export function TopologyView({
     }
   `
 
-  const nodeCount = activeNodes.length
-  const edgeCount = activeEdges.length
+  const nodeCount = mode === 'package' ? packageCounts.nodes : trajectoryNodes.length
+  const edgeCount = mode === 'package' ? packageCounts.edges : trajectoryEdges.length
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -384,11 +316,22 @@ export function TopologyView({
           </div>
         )}
 
-        {/* React Flow canvas */}
-        {(mode === 'package' && packageSummary) || (mode === 'trajectory' && trajectoryReport) ? (
+        {/* Package knowledge graph */}
+        {mode === 'package' && packageSummary && (
+          <PackageGraph
+            packageSummary={packageSummary}
+            findings={findings ?? []}
+            skillName={selectedSkillPath ?? 'SKILL.md'}
+            isDark={isDark}
+            onSelectFile={onSelectFile}
+          />
+        )}
+
+        {/* Trajectory flow canvas */}
+        {mode === 'trajectory' && trajectoryReport && (
           <ReactFlow
-            nodes={activeNodes}
-            edges={activeEdges}
+            nodes={trajectoryNodes}
+            edges={trajectoryEdges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView
@@ -410,7 +353,6 @@ export function TopologyView({
             <MiniMap
               className="!bottom-4 !right-4 !rounded-xl !overflow-hidden !border !border-slate-700/40"
               nodeColor={(node) => {
-                if (node.type === 'skillNode') return '#3b82f6'
                 if (node.type === 'toolCallNode') {
                   const step = (node.data as { step?: { is_error?: boolean; is_redundant?: boolean } })?.step
                   if (step?.is_error) return '#f43f5e'
@@ -422,16 +364,6 @@ export function TopologyView({
               }}
               maskColor={isDark ? 'rgba(2,6,23,0.75)' : 'rgba(248,250,252,0.75)'}
               style={{ background: isDark ? '#0f172a' : '#f8fafc' }}
-            />
-          </ReactFlow>
-        ) : (
-          /* Blank canvas with dot background when no data */
-          <ReactFlow nodes={[]} edges={[]} nodeTypes={nodeTypes} edgeTypes={edgeTypes} proOptions={{ hideAttribution: true }}>
-            <Background
-              variant={BackgroundVariant.Dots}
-              gap={20}
-              size={1.5}
-              color={isDark ? '#1e293b' : '#cbd5e1'}
             />
           </ReactFlow>
         )}

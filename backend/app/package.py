@@ -6,6 +6,7 @@ metadata extraction, and holistic context token economy accounting.
 from __future__ import annotations
 
 import logging
+import posixpath
 from enum import Enum
 from pathlib import Path
 from typing import Literal, Optional
@@ -49,6 +50,8 @@ class ResolvedFileReference(BaseModel):
     token_count: int = 0
     is_binary: bool = False
     content_preview: Optional[str] = None
+    # Other resolved package files that this file links to / imports (relative paths)
+    references: list[str] = Field(default_factory=list)
 
 
 class PackageTokenEconomy(BaseModel):
@@ -184,6 +187,59 @@ def resolve_file_reference(ref: FileReference, base_dir: Path | str) -> Resolved
         )
 
 
+# ── Cross-reference extraction ────────────────────────────────────────────────
+
+MAX_CROSS_REFERENCES = 25
+MAX_SCAN_BYTES = 256 * 1024
+
+
+def _norm(path: str) -> str:
+    return posixpath.normpath(path.strip().replace("\\", "/").lstrip("/"))
+
+
+def extract_cross_references(
+    text: str, source_path: str, known_paths: dict[str, str]
+) -> list[str]:
+    """
+    Find which other package files `text` mentions. `known_paths` maps normalized
+    path -> original relative_path. A file matches when its path appears in the text
+    verbatim, or relative to the source file's directory (e.g. `](../a.md)`).
+    """
+    source_norm = _norm(source_path)
+    source_dir = posixpath.dirname(source_norm)
+    found: list[str] = []
+    for norm, original in known_paths.items():
+        if norm == source_norm:
+            continue
+        candidates = {norm}
+        if source_dir:
+            candidates.add(posixpath.relpath(norm, source_dir))
+        if any(c in text for c in candidates):
+            found.append(original)
+            if len(found) >= MAX_CROSS_REFERENCES:
+                break
+    return found
+
+
+def _attach_cross_references(resolved: list[ResolvedFileReference]) -> None:
+    known = {
+        _norm(r.relative_path): r.relative_path
+        for r in resolved
+        if r.status == ReferenceFileStatus.FOUND
+    }
+    for r in resolved:
+        if r.status != ReferenceFileStatus.FOUND or r.is_binary or not r.absolute_path:
+            continue
+        try:
+            path = Path(r.absolute_path)
+            with path.open("r", encoding="utf-8", errors="replace") as fh:
+                text = fh.read(MAX_SCAN_BYTES)
+        except Exception as exc:
+            logger.warning("Cross-reference scan failed for %s: %s", r.absolute_path, exc)
+            continue
+        r.references = extract_cross_references(text, r.relative_path, known)
+
+
 # ── Token Economy Accounting ──────────────────────────────────────────────────
 
 def compute_package_token_economy(
@@ -269,6 +325,8 @@ def resolve_skill_package(
     resolved: list[ResolvedFileReference] = [
         resolve_file_reference(ref, base_path) for ref in doc.referenced_files
     ]
+
+    _attach_cross_references(resolved)
 
     tokens = compute_package_token_economy(doc, resolved)
 
