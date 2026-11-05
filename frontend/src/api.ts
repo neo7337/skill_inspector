@@ -128,3 +128,29 @@ export async function profileTrajectory(
   return data
 }
 
+
+export async function fetchFileContent(
+  baseDir: string,
+  relativePath: string,
+): Promise<{ content: string; size_bytes: number; line_count: number; token_count: number; absolute_path: string }> {
+  const { data } = await api.get('/skill/file', {
+    params: { base_dir: baseDir, path: relativePath },
+  })
+  return data
+}
+
+export async function scanProject(rootDir: string): Promise<import('./types').ProjectScanResult> {
+  const { data } = await api.post('/project/scan', { root_dir: rootDir })
+  return data
+}
+
+export async function resolveSkill(
+  rootDir: string,
+  skillRelativePath: string,
+): Promise<import('./types').ProjectResolveResult> {
+  const { data } = await api.post('/project/resolve', {
+    root_dir: rootDir,
+    skill_relative_path: skillRelativePath,
+  })
+  return data
+}

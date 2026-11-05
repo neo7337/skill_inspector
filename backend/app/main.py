@@ -390,3 +390,145 @@ def profile_trajectory(request: TrajectoryProfileRequest):
     except Exception as exc:
         logger.exception("Failed to profile trajectory: %s", exc)
         raise HTTPException(status_code=422, detail=f"Trajectory parsing error: {exc}")
+
+
+# ── File Content Endpoint ─────────────────────────────────────────────────────
+
+@app.get("/skill/file")
+def read_file_content(base_dir: str, path: str):
+    """
+    Safely read the full content of a referenced file inside a package base directory.
+    Prevents path traversal. Returns full text content (not capped like content_preview).
+    """
+    if not base_dir or not base_dir.strip():
+        raise HTTPException(status_code=422, detail="base_dir must not be empty.")
+    if not path or not path.strip():
+        raise HTTPException(status_code=422, detail="path must not be empty.")
+
+    from pathlib import Path
+
+    base_path = Path(base_dir.strip()).resolve()
+    if not base_path.exists() or not base_path.is_dir():
+        raise HTTPException(status_code=404, detail=f"Base directory not found: {base_path}")
+
+    rel_clean = path.strip().lstrip("/\\")
+    try:
+        target = (base_path / rel_clean).resolve()
+        target.relative_to(base_path)  # raises ValueError on traversal
+    except (ValueError, RuntimeError):
+        raise HTTPException(status_code=403, detail="Path traversal detected — access denied.")
+
+    if not target.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {rel_clean}")
+    if not target.is_file():
+        raise HTTPException(status_code=422, detail=f"Path is not a file: {rel_clean}")
+
+    from app.package import is_binary_file
+    if is_binary_file(target):
+        raise HTTPException(status_code=422, detail="File is binary and cannot be returned as text.")
+
+    try:
+        text = target.read_text(encoding="utf-8", errors="replace")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to read file: {exc}")
+
+    stat = target.stat()
+    return {
+        "relative_path": rel_clean,
+        "absolute_path": str(target),
+        "content": text,
+        "size_bytes": stat.st_size,
+        "line_count": len(text.splitlines()),
+        "token_count": len(text) // 4,
+    }
+
+
+# ── Project-level Endpoints ───────────────────────────────────────────────────
+
+class ProjectScanRequest(BaseModel):
+    root_dir: str
+
+
+class ProjectResolveRequest(BaseModel):
+    root_dir: str
+    skill_relative_path: str
+
+
+@app.post("/project/scan")
+def project_scan(request: ProjectScanRequest):
+    """
+    Walk an entire project directory tree and return a FileTreeNode hierarchy.
+    Identifies skill files (any .md with valid frontmatter) anywhere in the tree.
+    Does NOT resolve references — call /project/resolve after selecting a skill.
+    """
+    from app.project import scan_project
+
+    if not request.root_dir or not request.root_dir.strip():
+        raise HTTPException(status_code=422, detail="root_dir must not be empty.")
+
+    try:
+        result = scan_project(request.root_dir.strip())
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except NotADirectoryError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Failed to scan project: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return result.model_dump()
+
+
+@app.post("/project/resolve")
+def project_resolve(request: ProjectResolveRequest):
+    """
+    Read a skill file at root_dir/skill_relative_path and resolve all its references
+    relative to the skill file's own directory (agentskills.io convention).
+    Returns skill content, resolved files, and token economy — ready to load into the editor.
+    """
+    from app.project import resolve_skill_in_project
+    from app.validators.static import run_static_validation
+
+    if not request.root_dir or not request.root_dir.strip():
+        raise HTTPException(status_code=422, detail="root_dir must not be empty.")
+    if not request.skill_relative_path or not request.skill_relative_path.strip():
+        raise HTTPException(status_code=422, detail="skill_relative_path must not be empty.")
+
+    try:
+        pkg = resolve_skill_in_project(
+            request.root_dir.strip(),
+            request.skill_relative_path.strip(),
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except ParseError as exc:
+        raise HTTPException(status_code=422, detail=f"Parse error: {exc.message}")
+    except Exception as exc:
+        logger.exception("Failed to resolve skill: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    report = run_static_validation(pkg.skill_doc, package=pkg)
+
+    return {
+        "root_dir": request.root_dir.strip(),
+        "skill_relative_path": request.skill_relative_path.strip(),
+        "skill_content": pkg.skill_doc.raw,
+        "base_dir": pkg.base_dir,          # skill's own directory — use for further validation
+        "skill_doc": {
+            "name": pkg.skill_doc.name,
+            "description": pkg.skill_doc.description,
+            "frontmatter": pkg.skill_doc.frontmatter,
+            "body": pkg.skill_doc.body,
+        },
+        "resolved_files": [r.model_dump() for r in pkg.resolved_files],
+        "tokens": pkg.tokens.model_dump(),
+        "missing_files_count": pkg.missing_files_count,
+        "found_files_count": pkg.found_files_count,
+        "validation": {
+            "findings": [f.model_dump() for f in report.findings],
+            "overall_status": report.overall_status.value,
+            "score": report.score,
+        },
+    }

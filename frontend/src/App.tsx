@@ -9,9 +9,10 @@ import type {
   SkillPackageSummary,
   ResolvedFileReference,
   ReferencedFile,
+  ProjectScanResult,
 } from './types'
 import { DEFAULT_MODELS } from './types'
-import { validateStatic, validateLLM, getRepairPlan, inspectPackage } from './api'
+import { validateStatic, validateLLM, getRepairPlan, scanProject, resolveSkill } from './api'
 import { StaticReport } from './components/StaticReport'
 import { LLMReport } from './components/LLMReport'
 import { ProviderConfigPanel } from './components/ProviderConfigPanel'
@@ -20,6 +21,7 @@ import { DiffViewer } from './components/DiffViewer'
 import { ScenarioMatrix } from './components/ScenarioMatrix'
 import { TrajectoryReport } from './components/TrajectoryReport'
 import { ReferenceFileDrawer } from './components/ReferenceFileDrawer'
+import { FileTreePanel } from './components/FileTreePanel'
 import { VALID_SKILL_EXAMPLE, BROKEN_SKILL_EXAMPLE } from './examples'
 import { useTheme } from './hooks/useTheme'
 import { applyFix } from './utils/applyFix'
@@ -156,10 +158,20 @@ export default function App() {
   const [backendStatus, setBackendStatus] = useState<'unknown' | 'ok' | 'error'>('unknown')
   const [toasts, setToasts] = useState<ToastState[]>([])
 
-  // Package base directory and file viewer drawer state
-  const [baseDir, setBaseDir] = useState<string>(() => localStorage.getItem('skill_base_dir') || '')
-  const [baseDirStatus, setBaseDirStatus] = useState<'idle' | 'scanning' | 'ready' | 'unresolved'>('idle')
+  // ── Project / file-tree state ───────────────────────────────────────────────
+  const [projectRoot, setProjectRoot] = useState<string>(() => localStorage.getItem('skill_project_root') || '')
+  const [scanResult, setScanResult] = useState<ProjectScanResult | null>(null)
+  const [isScanning, setIsScanning] = useState(false)
+  const [scanError, setScanError] = useState<string | null>(null)
+
+  const [selectedSkillPath, setSelectedSkillPath] = useState<string | null>(null)
+  const [isResolving, setIsResolving] = useState(false)
+
+  // base_dir for validators = skill's own directory (set by resolveSkill)
+  const [baseDir, setBaseDir] = useState<string>('')
   const [packageSummary, setPackageSummary] = useState<SkillPackageSummary | null>(null)
+
+  // Reference file drawer
   const [selectedFile, setSelectedFile] = useState<ResolvedFileReference | ReferencedFile | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -181,48 +193,83 @@ export default function App() {
     setToasts(prev => prev.filter(t => t.id !== id))
   }, [])
 
-  const handleSelectFile = useCallback((file: ResolvedFileReference | ReferencedFile) => {
-    setSelectedFile(file)
+  const handleSelectFile = useCallback((file: ResolvedFileReference | ReferencedFile | string) => {
+    if (typeof file === 'string') {
+      // Plain relative path from FileTreePanel click on a non-skill file
+      setSelectedFile({ path: file, kind: 'other' } as ReferencedFile)
+    } else {
+      setSelectedFile(file)
+    }
     setDrawerOpen(true)
   }, [])
 
-  const handleScanPackage = useCallback(async (dirToScan?: string) => {
-    const targetDir = (dirToScan ?? baseDir).trim()
-    if (!targetDir) {
-      setPackageSummary(null)
-      setBaseDirStatus('idle')
-      return
+  // ── Persist project root ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (projectRoot.trim()) {
+      localStorage.setItem('skill_project_root', projectRoot.trim())
+    } else {
+      localStorage.removeItem('skill_project_root')
     }
-    setBaseDirStatus('scanning')
+  }, [projectRoot])
+
+  // ── Open project: scan entire tree ───────────────────────────────────────────
+  const handleOpenProject = useCallback(async (rootOverride?: string) => {
+    const root = (rootOverride ?? projectRoot).trim()
+    if (!root) return
+    setIsScanning(true)
+    setScanError(null)
+    setScanResult(null)
+    setSelectedSkillPath(null)
+    setPackageSummary(null)
+    setBaseDir('')
     try {
-      const pkg = await inspectPackage(targetDir, debouncedContent.trim() || undefined)
-      setPackageSummary(pkg)
-      setBaseDirStatus('ready')
-      if (!content.trim() && pkg.skill_content) {
-        setContent(pkg.skill_content)
-        showToast('✓ Loaded SKILL.md from package directory', 'info')
-      } else {
-        showToast(`✓ Package resolved: ${pkg.found_files_count} files found`, 'success')
+      const result = await scanProject(root)
+      setScanResult(result)
+      showToast(`✓ Project opened: ${result.total_files} files, ${result.skill_files.length} skill(s) found`, 'success')
+      // Auto-select if only one skill found
+      if (result.skill_files.length === 1) {
+        handleSelectSkill(root, result.skill_files[0])
       }
     } catch (err: any) {
-      setBaseDirStatus('unresolved')
-      const msg = err?.response?.data?.detail || 'Failed to resolve base directory'
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to scan project'
+      setScanError(msg)
       showToast(`⚠ ${msg}`, 'warning')
+    } finally {
+      setIsScanning(false)
     }
-  }, [baseDir, debouncedContent, content, showToast])
+  }, [projectRoot, showToast])
 
-  useEffect(() => {
-    if (baseDir.trim()) {
-      localStorage.setItem('skill_base_dir', baseDir.trim())
-    } else {
-      localStorage.removeItem('skill_base_dir')
+  // ── Select skill: resolve its references ─────────────────────────────────────
+  const handleSelectSkill = useCallback(async (rootDir: string, skillPath: string) => {
+    setSelectedSkillPath(skillPath)
+    setIsResolving(true)
+    try {
+      const result = await resolveSkill(rootDir, skillPath)
+      setContent(result.skill_content)
+      setBaseDir(result.base_dir)
+      setPackageSummary({
+        base_dir: result.base_dir,
+        resolved_files: result.resolved_files,
+        tokens: result.tokens,
+        missing_files_count: result.missing_files_count,
+        found_files_count: result.found_files_count,
+      })
+      setLlmResult(null)
+      setLlmContentStale(false)
+      showToast(`✓ Loaded ${skillPath.split('/').pop()}`, 'success')
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to resolve skill'
+      showToast(`⚠ ${msg}`, 'warning')
+    } finally {
+      setIsResolving(false)
     }
-  }, [baseDir])
+  }, [showToast])
 
+  // ── Restore previous project root on mount ───────────────────────────────────
   useEffect(() => {
-    const saved = localStorage.getItem('skill_base_dir')
-    if (saved && saved.trim()) {
-      handleScanPackage(saved.trim())
+    const saved = localStorage.getItem('skill_project_root')
+    if (saved?.trim()) {
+      handleOpenProject(saved.trim())
     }
   }, [])
 
@@ -262,7 +309,6 @@ export default function App() {
           setStaticResult(result)
           if (result.package) {
             setPackageSummary(result.package)
-            setBaseDirStatus('ready')
           }
           setStaticLoading(false)
         }
@@ -501,108 +547,83 @@ export default function App() {
         </div>
       </header>
 
-      {/* Base Directory Toolbar */}
-      <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-6 py-2 flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-3 flex-1 min-w-[320px]">
-          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium shrink-0">
-            <svg className="w-4 h-4 text-indigo-500 dark:text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-            </svg>
-            <span className="font-semibold text-slate-700 dark:text-slate-300">Package Root:</span>
-          </div>
-          <div className="relative flex-1 max-w-xl">
-            <input
-              type="text"
-              value={baseDir}
-              onChange={(e) => setBaseDir(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleScanPackage()
-                }
+      {/* Project Root Toolbar */}
+      <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-4 py-2 flex items-center gap-2 text-xs">
+        <svg className="w-4 h-4 text-indigo-500 dark:text-indigo-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+        </svg>
+        <span className="font-semibold text-slate-600 dark:text-slate-400 shrink-0">Project Root:</span>
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={projectRoot}
+            onChange={e => setProjectRoot(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleOpenProject() }}
+            placeholder="/path/to/your/project  (any directory — skills found anywhere inside)"
+            className="w-full px-3 py-1.5 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+          />
+          {projectRoot && (
+            <button
+              type="button"
+              onClick={() => {
+                setProjectRoot('')
+                setScanResult(null)
+                setScanError(null)
+                setSelectedSkillPath(null)
+                setPackageSummary(null)
+                setBaseDir('')
               }}
-              placeholder="/absolute/path/to/skill-package (e.g. ./samples/valid-skill)"
-              className="w-full px-3 py-1.5 pl-8 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all shadow-inner"
-            />
-            <span className="absolute left-2.5 top-2 text-slate-400 dark:text-slate-500 select-none">
-              📁
-            </span>
-            {baseDir && (
-              <button
-                type="button"
-                onClick={() => {
-                  setBaseDir('')
-                  setPackageSummary(null)
-                  setBaseDirStatus('idle')
-                }}
-                className="absolute right-2 top-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded transition-colors"
-                title="Clear package directory"
-              >
-                ✕
-              </button>
-            )}
+              className="absolute right-2 top-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded"
+            >✕</button>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => handleOpenProject()}
+          disabled={isScanning || !projectRoot.trim()}
+          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm flex items-center gap-1.5 transition-all active:scale-95 shrink-0"
+        >
+          {isScanning ? (
+            <>
+              <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              <span>Scanning…</span>
+            </>
+          ) : (
+            <span>{scanResult ? 'Rescan' : 'Open Project'}</span>
+          )}
+        </button>
+        {/* Status pill */}
+        {scanResult && !isScanning && (
+          <div className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium badge-emerald">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            {scanResult.skill_files.length} skill{scanResult.skill_files.length !== 1 ? 's' : ''} · {scanResult.total_files} files
           </div>
-
-          <button
-            type="button"
-            onClick={() => handleScanPackage()}
-            disabled={baseDirStatus === 'scanning' || !baseDir.trim()}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm flex items-center gap-1.5 transition-all active:scale-95"
-            title="Scan base directory for skill package and referenced files"
-          >
-            {baseDirStatus === 'scanning' ? (
-              <>
-                <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                <span>Scanning…</span>
-              </>
-            ) : (
-              <>
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>{baseDirStatus === 'ready' ? 'Rescan' : 'Scan Package'}</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* Status Pill */}
-        <div className="flex items-center gap-2">
-          {baseDirStatus === 'ready' && packageSummary && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium badge-emerald">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span className="font-semibold">Package Ready</span>
-              <span className="text-emerald-600/70 dark:text-emerald-400/70 font-mono">
-                ({packageSummary.found_files_count} files / {packageSummary.resolved_files.length} refs / {packageSummary.tokens.peak_context_footprint.toLocaleString()} peak tokens)
-              </span>
-            </div>
-          )}
-          {baseDirStatus === 'unresolved' && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium badge-amber">
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-              <span className="font-semibold">Directory Unresolved</span>
-              <span className="text-amber-600/70 dark:text-amber-400/70">(Check path exists & accessible)</span>
-            </div>
-          )}
-          {baseDirStatus === 'scanning' && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium badge-brand">
-              <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse"></span>
-              <span className="font-semibold">Scanning Directory…</span>
-            </div>
-          )}
-          {baseDirStatus === 'idle' && (
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-              <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-              <span>No package attached (attach directory to resolve on-disk references)</span>
-            </div>
-          )}
-        </div>
+        )}
+        {scanError && !isScanning && (
+          <div className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium badge-amber">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+            Scan failed
+          </div>
+        )}
       </div>
 
       {/* Main layout */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* File Tree Panel — shown when a project is scanned */}
+        {scanResult && (
+          <FileTreePanel
+            scanResult={scanResult}
+            isScanning={isScanning}
+            scanError={scanError}
+            selectedSkillPath={selectedSkillPath}
+            onSelectSkill={(skillPath) => handleSelectSkill(scanResult!.root_dir, skillPath)}
+            onSelectFile={(p) => handleSelectFile(p)}
+            isResolving={isResolving}
+          />
+        )}
         {/* Left: Editor Workspace */}
         <div className="w-1/2 flex flex-col min-h-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
           {/* Editor toolbar */}
@@ -974,6 +995,7 @@ export default function App() {
         onClose={() => setDrawerOpen(false)}
         file={selectedFile}
         baseDir={baseDir.trim() || undefined}
+        projectRoot={projectRoot.trim() || undefined}
       />
 
       {/* Toast container */}
