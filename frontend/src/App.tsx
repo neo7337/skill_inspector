@@ -993,6 +993,7 @@ export default function App() {
         onClose={() => setDrawerOpen(false)}
         file={selectedFile}
         baseDir={baseDir.trim() || undefined}
+        projectRoot={projectRoot.trim() || undefined}
       />
 
       {/* Toast container */}

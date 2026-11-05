@@ -6,7 +6,8 @@ export interface ReferenceFileDrawerProps {
   isOpen: boolean
   onClose: () => void
   file: ResolvedFileReference | ReferencedFile | null
-  baseDir?: string
+  baseDir?: string        // skill's own directory (for resolved refs)
+  projectRoot?: string    // project root (for free tree file clicks)
 }
 
 const PREVIEW_CAP = 4000  // must match backend's text[:4000]
@@ -16,19 +17,40 @@ export function ReferenceFileDrawer({
   onClose,
   file,
   baseDir,
+  projectRoot,
 }: ReferenceFileDrawerProps) {
+  // ── Derived values (computed before hooks so hooks can use them) ────────────
+  const resolved = file && 'status' in file ? (file as ResolvedFileReference) : null
+  const relativePath = resolved
+    ? resolved.relative_path
+    : file
+    ? (file as ReferencedFile).path
+    : ''
+  const kind = file?.kind ?? 'other'
+  const isBinary = resolved?.is_binary ?? false
+  const status = resolved?.status ?? null
+  const previewContent = resolved?.content_preview ?? ''
+  const isPreviewTruncated = previewContent.length >= PREVIEW_CAP
+  // For free tree-file clicks use projectRoot; for resolved refs use skill baseDir
+  const effectiveBase = resolved ? baseDir : (projectRoot ?? baseDir)
+
+  // ── ALL hooks unconditionally above any early return ─────────────────────────
   const [copied, setCopied] = useState(false)
   const [fullContent, setFullContent] = useState<string | null>(null)
   const [fetchLoading, setFetchLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
-  // Reset fetch state whenever the file changes
+  // The content we actually display: full (fetched) > preview (from package scan)
+  const displayContent = fullContent ?? previewContent
+
+  // Reset fetch state whenever the selected file changes
   useEffect(() => {
     setFullContent(null)
     setFetchError(null)
     setFetchLoading(false)
   }, [file])
 
+  // Keyboard close
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) onClose()
@@ -37,26 +59,12 @@ export function ReferenceFileDrawer({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, onClose])
 
-  if (!isOpen || !file) return null
-
-  // Discriminate between ResolvedFileReference (has 'status') and ReferencedFile
-  const resolved = 'status' in file ? (file as ResolvedFileReference) : null
-  const relativePath = resolved ? resolved.relative_path : (file as ReferencedFile).path
-  const kind = file.kind
-  const isBinary = resolved?.is_binary ?? false
-  const status = resolved?.status ?? null   // null = unresolved (no package scanned yet)
-  const previewContent = resolved?.content_preview ?? ''
-  const isPreviewTruncated = previewContent.length >= PREVIEW_CAP
-
-  // The content we actually display: full (fetched) > preview (from resolved ref)
-  const displayContent = fullContent ?? previewContent
-
   const handleFetchFull = useCallback(async () => {
-    if (!baseDir) return
+    if (!effectiveBase || !relativePath) return
     setFetchLoading(true)
     setFetchError(null)
     try {
-      const result = await fetchFileContent(baseDir, relativePath)
+      const result = await fetchFileContent(effectiveBase, relativePath)
       setFullContent(result.content)
     } catch (err: any) {
       const msg = err?.response?.data?.detail ?? err?.message ?? 'Failed to load file'
@@ -64,23 +72,26 @@ export function ReferenceFileDrawer({
     } finally {
       setFetchLoading(false)
     }
-  }, [baseDir, relativePath])
+  }, [effectiveBase, relativePath])
 
-  // Auto-fetch when: file is unresolved (fallback ReferencedFile) but baseDir is set
+  // Auto-fetch for unresolved (tree-click) files when a base dir is available
   useEffect(() => {
-    if (!isOpen || !file) return
-    if (!resolved && baseDir && !fullContent && !fetchLoading && !fetchError) {
+    if (!isOpen || !file || resolved) return
+    if (effectiveBase && !fullContent && !fetchLoading && !fetchError) {
       handleFetchFull()
     }
-  }, [isOpen, file, resolved, baseDir, fullContent, fetchLoading, fetchError, handleFetchFull])
+  }, [isOpen, file, resolved, effectiveBase, fullContent, fetchLoading, fetchError, handleFetchFull])
 
-  const handleCopy = () => {
+  const handleCopy = useCallback(() => {
     if (displayContent) {
       navigator.clipboard.writeText(displayContent)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     }
-  }
+  }, [displayContent])
+
+  // ── Early return AFTER all hooks ─────────────────────────────────────────────
+  if (!isOpen || !file) return null
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
@@ -152,7 +163,7 @@ export function ReferenceFileDrawer({
           <div className="p-2 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800/60">
             <span className="text-[10px] text-slate-400 uppercase tracking-wide block">Size</span>
             <span className="font-mono text-slate-700 dark:text-slate-200">
-              {resolved ? `${(resolved.size_bytes / 1024).toFixed(1)} KB` : '—'}
+              {resolved?.size_bytes ? `${(resolved.size_bytes / 1024).toFixed(1)} KB` : '—'}
             </span>
           </div>
           <div className="p-2 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800/60">
@@ -213,8 +224,8 @@ export function ReferenceFileDrawer({
             </div>
           )}
 
-          {/* ── CASE 3: Unresolved / fallback ReferencedFile — no package scanned ── */}
-          {!resolved && !baseDir && !fetchLoading && !fetchError && !fullContent && (
+          {/* ── CASE 3: Unresolved / fallback ReferencedFile — no base dir available ── */}
+          {!resolved && !effectiveBase && !fetchLoading && !fetchError && !fullContent && (
             <div className="p-6 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900/40 space-y-3 text-center">
               <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center mx-auto">
                 <svg className="w-5 h-5 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -256,7 +267,7 @@ export function ReferenceFileDrawer({
                 Failed to Load File
               </div>
               <p className="text-xs text-slate-600 dark:text-slate-300">{fetchError}</p>
-              {baseDir && (
+              {effectiveBase && (
                 <button
                   onClick={handleFetchFull}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white transition-colors"
@@ -280,7 +291,7 @@ export function ReferenceFileDrawer({
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {isPreviewTruncated && !fullContent && baseDir && (
+                  {isPreviewTruncated && !fullContent && effectiveBase && (
                     <button
                       onClick={handleFetchFull}
                       className="px-2.5 py-1 rounded-md text-[11px] font-mono bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-500 transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -302,7 +313,7 @@ export function ReferenceFileDrawer({
               <pre className="p-4 rounded-xl bg-white dark:bg-[#090d18] border border-slate-200 dark:border-slate-800 font-mono text-xs text-slate-800 dark:text-slate-200 overflow-x-auto leading-relaxed shadow-inner">
                 <code>{displayContent}</code>
               </pre>
-              {isPreviewTruncated && !fullContent && !baseDir && (
+              {isPreviewTruncated && !fullContent && !effectiveBase && (
                 <p className="text-[11px] text-amber-600 dark:text-amber-400 italic text-center">
                   Preview truncated. Set a Package Root directory to load the full file.
                 </p>
