@@ -87,6 +87,8 @@ export interface ResolvedFileReference {
   is_binary: boolean
   content_preview?: string | null
   error_message?: string | null
+  /** Other resolved package files this file links to / imports */
+  references?: string[]
 }
 
 export type BudgetStatus = 'within_budget' | 'approaching_limit' | 'exceeds_budget'
