@@ -115,6 +115,89 @@ function TreeNode({ node, depth, selectedPath, onSelectSkill, onSelectFile }: Tr
   )
 }
 
+// ── Collapsible skills list ───────────────────────────────────────────────────
+
+/** Readable name: parent folder for SKILL.md files, otherwise the file name. */
+function skillDisplayName(path: string): string {
+  const parts = path.split('/').filter(Boolean)
+  const file = parts[parts.length - 1] ?? path
+  if (/^skill\.md$/i.test(file) && parts.length > 1) return parts[parts.length - 2]
+  return file
+}
+
+interface SkillsSectionProps {
+  skillFiles: string[]
+  selectedSkillPath: string | null
+  isResolving: boolean
+  onSelectSkill: (path: string) => void
+}
+
+function SkillsSection({ skillFiles, selectedSkillPath, isResolving, onSelectSkill }: SkillsSectionProps) {
+  const [open, setOpen] = useState(true)
+  const listId = 'skills-section-list'
+  const active = selectedSkillPath && skillFiles.includes(selectedSkillPath) ? selectedSkillPath : null
+
+  return (
+    <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-indigo-50/50 dark:bg-indigo-950/20">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        aria-controls={listId}
+        className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left hover:bg-indigo-100/60 dark:hover:bg-indigo-900/30 transition-colors"
+      >
+        <span className="w-3 text-[10px] text-indigo-500 dark:text-indigo-400 select-none">{open ? '▾' : '▸'}</span>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+          Skills
+        </span>
+        <span className="text-[10px] font-mono text-indigo-500/80 dark:text-indigo-400/80">({skillFiles.length})</span>
+        {!open && active && (
+          <span className="ml-1 text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate">
+            · {skillDisplayName(active)}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div id={listId} className="max-h-48 overflow-y-auto scrollbar-thin px-2 pb-1.5">
+          {skillFiles.map(sf => {
+            const isActive = selectedSkillPath === sf
+            return (
+              <button
+                key={sf}
+                type="button"
+                onClick={() => onSelectSkill(sf)}
+                title={sf}
+                className={`
+                  w-full text-left px-2 py-1 rounded flex items-center gap-1.5 transition-colors
+                  ${isActive
+                    ? 'bg-blue-600 text-white'
+                    : 'text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40'
+                  }
+                `}
+              >
+                <span className="text-[11px] shrink-0">🛡</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[11px] font-semibold truncate">{skillDisplayName(sf)}</span>
+                  <span className={`block text-[9px] font-mono truncate ${isActive ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                    {sf}
+                  </span>
+                </span>
+                {isResolving && isActive && (
+                  <svg className="w-3 h-3 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main Panel ────────────────────────────────────────────────────────────────
 
 export interface FileTreePanelProps {
@@ -187,36 +270,14 @@ export function FileTreePanel({
         </div>
       </div>
 
-      {/* Skill quick-picks if many */}
-      {skill_files.length > 1 && (
-        <div className="shrink-0 px-2 py-1.5 border-b border-slate-200 dark:border-slate-800 bg-indigo-50/50 dark:bg-indigo-950/20">
-          <div className="text-[9px] font-bold uppercase tracking-wider text-indigo-500 dark:text-indigo-400 px-1 mb-1">
-            Skills in project
-          </div>
-          {skill_files.map(sf => (
-            <button
-              key={sf}
-              type="button"
-              onClick={() => onSelectSkill(sf)}
-              className={`
-                w-full text-left px-2 py-1 rounded text-[10px] font-mono flex items-center gap-1.5 transition-colors
-                ${selectedSkillPath === sf
-                  ? 'bg-blue-600 text-white'
-                  : 'text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40'
-                }
-              `}
-            >
-              <span className="text-[11px]">🛡</span>
-              <span className="truncate">{sf}</span>
-              {isResolving && selectedSkillPath === sf && (
-                <svg className="ml-auto w-3 h-3 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-              )}
-            </button>
-          ))}
-        </div>
+      {/* Collapsible list of skills found in the project */}
+      {skill_files.length > 0 && (
+        <SkillsSection
+          skillFiles={skill_files}
+          selectedSkillPath={selectedSkillPath}
+          isResolving={isResolving}
+          onSelectSkill={onSelectSkill}
+        />
       )}
 
       {/* File tree */}
