@@ -32,6 +32,22 @@ BODY_TOKEN_WARN_THRESHOLD = 5000
 _NAME_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 _CONSECUTIVE_HYPHENS = re.compile(r"--")
 
+# ── Linting mode ─────────────────────────────────────────────────────────────
+
+LintingMode = Literal["standard", "claude-code"]
+
+# Claude Code / plugin-specific frontmatter fields (not in the base spec).
+# These are accepted without warning when mode="claude-code".
+CLAUDE_CODE_FIELDS: frozenset[str] = frozenset({
+    "disable-model-invocation",  # bool  – prevent auto-trigger; pair with user-invocable
+    "user-invocable",            # bool  – hide from user slash commands
+    "argument-hint",             # str   – autocomplete hint, e.g. "[env]"
+    "context",                   # str   – e.g. "fork" to run in isolated subagent
+    "model",                     # str   – override model, e.g. "sonnet"
+    "effort",                    # str   – e.g. "low" / "high"
+    "background",                # bool  – false = return result in same turn
+})
+
 
 # ── Report models ─────────────────────────────────────────────────────────────
 
@@ -393,9 +409,37 @@ def _check_metadata(metadata: Any) -> list[Finding]:
     return findings
 
 
-def _check_allowed_tools(allowed_tools: Any) -> list[Finding]:
+def _check_allowed_tools(allowed_tools: Any, mode: LintingMode = "standard") -> list[Finding]:
     if allowed_tools is None:
         return []  # Optional, experimental
+
+    # Claude Code accepts a YAML list of tool strings in addition to a space-separated string.
+    if isinstance(allowed_tools, list):
+        if mode == "claude-code":
+            if all(isinstance(t, str) for t in allowed_tools):
+                return [Finding(
+                    dimension="Schema",
+                    rule="allowed-tools.valid",
+                    status=RuleStatus.PASS,
+                    message=f"'allowed-tools' is a valid list of {len(allowed_tools)} tool(s) (Claude Code list form accepted).",
+                    suggestion="",
+                )]
+            else:
+                return [Finding(
+                    dimension="Schema",
+                    rule="allowed-tools.type",
+                    status=RuleStatus.FAIL,
+                    message="'allowed-tools' list must contain only strings.",
+                    suggestion="Each list entry must be a tool name string, e.g. '- Bash(git *)\n- Read'",
+                )]
+        else:
+            return [Finding(
+                dimension="Schema",
+                rule="allowed-tools.type",
+                status=RuleStatus.FAIL,
+                message=f"'allowed-tools' must be a space-separated string, got list. Use Claude Code mode to allow list form.",
+                suggestion="Format as a space-separated string: allowed-tools: Bash(git:*) Read Write",
+            )]
 
     if not isinstance(allowed_tools, str):
         return [Finding(
@@ -481,12 +525,28 @@ def _check_body(doc: SkillDocument) -> list[Finding]:
     return findings
 
 
-def _check_unknown_fields(frontmatter: dict[str, Any]) -> list[Finding]:
-    known = {"name", "description", "license", "compatibility", "metadata", "allowed-tools"}
+def _check_unknown_fields(frontmatter: dict[str, Any], mode: LintingMode = "standard") -> list[Finding]:
+    base_known = {"name", "description", "license", "compatibility", "metadata", "allowed-tools"}
+    known = base_known | CLAUDE_CODE_FIELDS if mode == "claude-code" else base_known
     unknown = set(frontmatter.keys()) - known
+
+    findings: list[Finding] = []
+
+    if mode == "claude-code":
+        # Report recognised Claude Code fields as informational PASSes
+        cc_present = set(frontmatter.keys()) & CLAUDE_CODE_FIELDS
+        if cc_present:
+            findings.append(Finding(
+                dimension="Claude Code",
+                rule="frontmatter.claude-code-fields",
+                status=RuleStatus.PASS,
+                message=f"Recognised Claude Code frontmatter fields: {sorted(cc_present)}.",
+                suggestion="",
+            ))
+
     if unknown:
         metadata_entries = "\n".join(f"  {k}: '{frontmatter[k]}'" for k in sorted(unknown))
-        return [Finding(
+        findings.append(Finding(
             dimension="Schema",
             rule="frontmatter.unknown-fields",
             status=RuleStatus.WARN,
@@ -495,6 +555,31 @@ def _check_unknown_fields(frontmatter: dict[str, Any]) -> list[Finding]:
             fix_kind="frontmatter_field",
             fix_field="metadata",
             fix_snippet=f"metadata:\n{metadata_entries}",
+        ))
+
+    return findings
+
+
+def _check_folder_name(doc_name: Optional[str], base_dir: Optional[str | Path]) -> list[Finding]:
+    """
+    Warn when the skill 'name' frontmatter value does not match the containing folder name.
+    Both the official skills-ref CLI and Claude Code enforce this convention.
+    Severity is WARN (not FAIL) because base_dir may be an arbitrary working directory.
+    """
+    if doc_name is None or base_dir is None:
+        return []
+
+    folder_name = Path(base_dir).name
+    if folder_name and folder_name != doc_name:
+        return [Finding(
+            dimension="Schema",
+            rule="name.folder-match",
+            status=RuleStatus.WARN,
+            message=(
+                f"Skill name '{doc_name}' does not match the containing folder name '{folder_name}'. "
+                "By convention the folder name must equal the skill name."
+            ),
+            suggestion=f"Rename the folder to '{doc_name}', or update 'name' in frontmatter to '{folder_name}'.",
         )]
     return []
 
@@ -639,12 +724,22 @@ def run_static_validation(
     doc: SkillDocument,
     base_dir: Optional[str | Path] = None,
     package: Optional[SkillPackage] = None,
+    mode: LintingMode = "standard",
 ) -> StaticValidationReport:
     """
     Run all agentskills.io spec validation rules against a parsed SkillDocument.
 
     If base_dir or package is provided, also validates package file integrity,
     path traversal safety, and peak context token economy.
+
+    Args:
+        doc: Parsed skill document.
+        base_dir: Optional path to the skill package root on disk.
+        package: Pre-resolved SkillPackage (skips resolution if provided).
+        mode: Linting mode — "standard" enforces the base agentskills.io spec;
+              "claude-code" additionally accepts Claude Code / plugin-specific
+              frontmatter fields (disable-model-invocation, context, model, etc.)
+              and list-form allowed-tools.
 
     Returns a StaticValidationReport with individual findings, overall status,
     and a 0-100 score.
@@ -662,9 +757,10 @@ def run_static_validation(
     findings.extend(_check_description(doc.description))
     findings.extend(_check_compatibility(doc.compatibility))
     findings.extend(_check_metadata(doc.metadata_field))
-    findings.extend(_check_allowed_tools(doc.allowed_tools))
+    findings.extend(_check_allowed_tools(doc.allowed_tools, mode=mode))
     findings.extend(_check_body(doc))
-    findings.extend(_check_unknown_fields(doc.frontmatter))
+    findings.extend(_check_unknown_fields(doc.frontmatter, mode=mode))
+    findings.extend(_check_folder_name(doc.name, base_dir))
     findings.extend(_check_scripts(doc))
 
     if package is not None:

@@ -76,11 +76,16 @@ def validate_command(
     provider: Optional[str] = typer.Option(None, "--provider", help="LLM provider (openai, anthropic, ollama)"),
     model: Optional[str] = typer.Option(None, "--model", help="LLM model name"),
     api_key: Optional[str] = typer.Option(None, "--api-key", help="API key for provider"),
+    mode: str = typer.Option("standard", "--mode", "-m", help="Linting mode: 'standard' (agentskills.io spec) or 'claude-code' (also accepts Claude Code / plugin fields)"),
 ):
     """Run structural and quality validation on a SKILL.md file."""
     cli_cfg = load_config()
     content = file.read_text(encoding="utf-8")
     console.print(f"\n[bold cyan]Validating:[/] {file.resolve()}")
+    if mode == "claude-code":
+        console.print("[bold blue]Mode:[/] Claude Code / Plugin (Claude Code-specific fields accepted)")
+    else:
+        console.print("[dim]Mode:[/] Standard (agentskills.io spec)")
 
     try:
         doc = parse_skill_md(content)
@@ -97,7 +102,7 @@ def validate_command(
         except Exception as exc:
             console.print(f"[bold yellow]Warning:[/] Could not resolve package in {resolved_base}: {exc}")
 
-    static_report = run_static_validation(doc, base_dir=resolved_base, package=pkg)
+    static_report = run_static_validation(doc, base_dir=resolved_base, package=pkg, mode=mode)
 
     # Render static table
     table = Table(title=f"Static Validation (Score: {static_report.score}/100 - {static_report.overall_status.value.upper()})")

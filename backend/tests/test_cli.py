@@ -92,3 +92,48 @@ def test_cli_config_commands():
     assert "Configuration File:" in result.stdout
 
 
+
+
+def test_validate_claude_code_mode_no_unknown_warn(tmp_path):
+    """--mode claude-code must not produce unknown-field warnings for CC-specific fields."""
+    skill_dir = tmp_path / "deploy-app"
+    skill_dir.mkdir()
+    skill_file = skill_dir / "SKILL.md"
+    skill_file.write_text("""---
+name: deploy-app
+description: Deploy the application. Use when the user asks to ship.
+disable-model-invocation: true
+context: fork
+model: sonnet
+argument-hint: "[env]"
+allowed-tools:
+  - Bash(git *)
+  - Read
+---
+Run tests, then deploy.
+""", encoding="utf-8")
+
+    result = runner.invoke(app, ["validate", str(skill_file), "--mode", "claude-code"])
+    assert result.exit_code == 0
+    assert "frontmatter.unknown-fields" not in result.output or "WARN" not in result.output
+
+
+def test_validate_standard_mode_warns_cc_fields(tmp_path):
+    """Default --mode standard must still warn about Claude Code fields."""
+    skill_dir = tmp_path / "deploy-app"
+    skill_dir.mkdir()
+    skill_file = skill_dir / "SKILL.md"
+    skill_file.write_text("""---
+name: deploy-app
+description: Deploy the application. Use when the user asks to ship.
+disable-model-invocation: true
+context: fork
+---
+Run tests, then deploy.
+""", encoding="utf-8")
+
+    result = runner.invoke(app, ["validate", str(skill_file)])
+    # Should still exit without crash; warning present
+    assert result.exit_code == 0
+    # The unknown-fields warning should reference the CC fields
+    assert "unknown" in result.output.lower() or "WARN" in result.output

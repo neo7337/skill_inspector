@@ -41,6 +41,7 @@ app.add_middleware(
 class StaticValidateRequest(BaseModel):
     content: str
     base_dir: str | None = None
+    mode: str = "standard"  # "standard" | "claude-code"
 
 
 class LLMValidateRequest(BaseModel):
@@ -51,6 +52,7 @@ class LLMValidateRequest(BaseModel):
     base_url: str | None = None
     base_dir: str | None = None
     include_references: bool = False
+    mode: str = "standard"  # "standard" | "claude-code"
 
 
 class PackageInspectRequest(BaseModel):
@@ -181,7 +183,7 @@ def validate_static(request: StaticValidateRequest):
         except Exception as exc:
             logger.warning("Failed to resolve package in /validate/static: %s", exc)
 
-    report = run_static_validation(doc, base_dir=request.base_dir, package=pkg)
+    report = run_static_validation(doc, base_dir=request.base_dir, package=pkg, mode=request.mode)
     response_data: dict[str, Any] = {
         "findings": [f.model_dump() for f in report.findings],
         "overall_status": report.overall_status.value,

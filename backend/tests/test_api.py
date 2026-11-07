@@ -451,3 +451,75 @@ Body content without references.
     async def test_inspect_package_empty_base_dir(self, client: AsyncClient):
         response = await client.post("/skill/package", json={"base_dir": "   "})
         assert response.status_code == 422
+
+
+class TestClaudeCodeModeAPI:
+    """Tests for mode='claude-code' passed through the /validate/static API."""
+
+    CC_SKILL = """---
+name: deploy-app
+description: Deploy the application to production. Use when the user asks to ship.
+disable-model-invocation: true
+context: fork
+model: sonnet
+argument-hint: "[env]"
+allowed-tools:
+  - Bash(git *)
+  - Read
+---
+Run tests then deploy.
+"""
+
+    async def test_static_validate_claude_code_mode_no_unknown_warn(self, client: AsyncClient):
+        response = await client.post(
+            "/validate/static",
+            json={"content": self.CC_SKILL, "mode": "claude-code"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        findings = data["findings"]
+        unknown = [f for f in findings if f["rule"] == "frontmatter.unknown-fields"]
+        assert unknown == [], f"Expected no unknown-fields warning in claude-code mode, got: {unknown}"
+
+    async def test_static_validate_standard_mode_warns_cc_fields(self, client: AsyncClient):
+        response = await client.post(
+            "/validate/static",
+            json={"content": self.CC_SKILL, "mode": "standard"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        findings = data["findings"]
+        unknown = [f for f in findings if f["rule"] == "frontmatter.unknown-fields"]
+        assert len(unknown) == 1
+        assert unknown[0]["status"] == "warn"
+
+    async def test_static_validate_cc_mode_list_allowed_tools_passes(self, client: AsyncClient):
+        response = await client.post(
+            "/validate/static",
+            json={"content": self.CC_SKILL, "mode": "claude-code"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        findings = data["findings"]
+        at_fail = [f for f in findings if f["rule"] == "allowed-tools.type"]
+        assert at_fail == [], "List-form allowed-tools must not fail in claude-code mode"
+        at_pass = [f for f in findings if f["rule"] == "allowed-tools.valid"]
+        assert len(at_pass) == 1
+        assert at_pass[0]["status"] == "pass"
+
+    async def test_static_validate_default_mode_is_standard(self, client: AsyncClient):
+        """Omitting mode should behave identically to mode='standard'."""
+        response_no_mode = await client.post(
+            "/validate/static",
+            json={"content": self.CC_SKILL},
+        )
+        response_standard = await client.post(
+            "/validate/static",
+            json={"content": self.CC_SKILL, "mode": "standard"},
+        )
+        assert response_no_mode.status_code == 200
+        assert response_standard.status_code == 200
+        # Both should have the same unknown-fields finding
+        no_mode_unknown = [f for f in response_no_mode.json()["findings"] if f["rule"] == "frontmatter.unknown-fields"]
+        std_unknown = [f for f in response_standard.json()["findings"] if f["rule"] == "frontmatter.unknown-fields"]
+        assert len(no_mode_unknown) == len(std_unknown)
