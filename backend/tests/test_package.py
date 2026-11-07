@@ -254,3 +254,28 @@ Only references `scripts/extract.py`.
         empty_dir.mkdir()
         with pytest.raises(FileNotFoundError, match="No SKILL.md or skill.md found"):
             resolve_skill_package(empty_dir)
+
+
+class TestCrossReferences:
+    def test_extract_cross_references(self):
+        from app.package import extract_cross_references
+
+        known = {"refs/a.md": "refs/a.md", "refs/b.md": "refs/b.md", "scripts/run.py": "scripts/run.py"}
+        text = "See [b](b.md) and scripts/run.py; ignores itself refs/a.md"
+        out = extract_cross_references(text, "refs/a.md", known)
+        assert sorted(out) == ["refs/b.md", "scripts/run.py"]
+
+    def test_package_attaches_references(self, tmp_path: Path):
+        from app.package import resolve_skill_package
+
+        (tmp_path / "references").mkdir()
+        (tmp_path / "references" / "a.md").write_text("link: [b](b.md)")
+        (tmp_path / "references" / "b.md").write_text("nothing here")
+        skill = (
+            "---\nname: x\ndescription: d\n---\n# X\n"
+            "Read references/a.md and references/b.md\n"
+        )
+        pkg = resolve_skill_package(tmp_path, skill_content=skill)
+        by_path = {r.relative_path: r for r in pkg.resolved_files}
+        assert by_path["references/a.md"].references == ["references/b.md"]
+        assert by_path["references/b.md"].references == []
