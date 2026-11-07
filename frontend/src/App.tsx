@@ -22,8 +22,7 @@ import { ScenarioMatrix } from './components/ScenarioMatrix'
 import { TrajectoryReport } from './components/TrajectoryReport'
 import { ReferenceFileDrawer } from './components/ReferenceFileDrawer'
 import { FileTreePanel } from './components/FileTreePanel'
-import { TopologyView } from './components/TopologyView'
-import { VALID_SKILL_EXAMPLE, BROKEN_SKILL_EXAMPLE } from './examples'
+import { VALID_SKILL_EXAMPLE, BROKEN_SKILL_EXAMPLE, CC_VALID_SKILL_EXAMPLE, CC_BROKEN_SKILL_EXAMPLE } from './examples'
 import { useTheme } from './hooks/useTheme'
 import { applyFix } from './utils/applyFix'
 
@@ -154,7 +153,6 @@ export default function App() {
   })
 
   const [activeTab, setActiveTab] = useState<'static' | 'llm' | 'repair' | 'scenarios' | 'profiler'>('static')
-  const [mainView, setMainView] = useState<'inspector' | 'topology'>('inspector')
   const [repairPlan, setRepairPlan] = useState<RepairPlanResult | null>(null)
   const [repairLoading, setRepairLoading] = useState(false)
   const [backendStatus, setBackendStatus] = useState<'unknown' | 'ok' | 'error'>('unknown')
@@ -171,7 +169,6 @@ export default function App() {
 
   // base_dir for validators = skill's own directory (set by resolveSkill)
   const [baseDir, setBaseDir] = useState<string>('')
-  const [lintingMode, setLintingMode] = useState<'standard' | 'claude-code'>('standard')
   const [packageSummary, setPackageSummary] = useState<SkillPackageSummary | null>(null)
 
   // Reference file drawer
@@ -306,7 +303,7 @@ export default function App() {
       if (!cancelled) setStaticLoading(true)
     })
 
-    validateStatic(debouncedContent, baseDir.trim() || undefined, lintingMode)
+    validateStatic(debouncedContent, baseDir.trim() || undefined)
       .then(result => {
         if (!cancelled) {
           setStaticResult(result)
@@ -401,7 +398,7 @@ export default function App() {
     setActiveTab('llm')
     llmRunContentRef.current = content
     try {
-      const result = await validateLLM(content, providerConfig, baseDir.trim() || undefined, lintingMode)
+      const result = await validateLLM(content, providerConfig, baseDir.trim() || undefined)
       setLlmResult(result)
       if (result.package) {
         setPackageSummary(result.package)
@@ -452,8 +449,17 @@ export default function App() {
 
   // ── Load examples ────────────────────────────────────────────────────────
 
-  const loadExample = (broken: boolean) => {
-    setContent(broken ? BROKEN_SKILL_EXAMPLE : VALID_SKILL_EXAMPLE)
+  const loadExample = (kind: 'valid' | 'broken' | 'cc-valid' | 'cc-broken') => {
+    const examples = {
+      'valid': VALID_SKILL_EXAMPLE,
+      'broken': BROKEN_SKILL_EXAMPLE,
+      'cc-valid': CC_VALID_SKILL_EXAMPLE,
+      'cc-broken': CC_BROKEN_SKILL_EXAMPLE,
+    }
+    setContent(examples[kind])
+    if (kind === 'cc-valid' || kind === 'cc-broken') {
+      setLintingMode('claude-code')
+    }
     setLlmResult(null)
     setLlmError(null)
     setLlmContentStale(false)
@@ -611,67 +617,6 @@ export default function App() {
             Scan failed
           </div>
         )}
-
-        {/* Linting Mode Toggle */}
-        <div className="shrink-0 flex items-center gap-1 ml-auto pl-3 border-l border-slate-200 dark:border-slate-700">
-          <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mr-1 select-none whitespace-nowrap">Mode:</span>
-          <button
-            type="button"
-            onClick={() => setLintingMode('standard')}
-            title="Standard: validates against the base agentskills.io spec"
-            className={`px-2.5 py-1 rounded-l-md text-[11px] font-semibold border transition-all select-none ${
-              lintingMode === 'standard'
-                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
-            }`}
-          >
-            Agent Skills
-          </button>
-          <button
-            type="button"
-            onClick={() => setLintingMode('claude-code')}
-            title="Claude Code / Plugin: also accepts disable-model-invocation, context, model, effort, argument-hint, user-invocable, background and list-form allowed-tools"
-            className={`px-2.5 py-1 rounded-r-md text-[11px] font-semibold border-t border-r border-b transition-all select-none ${
-              lintingMode === 'claude-code'
-                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
-            }`}
-          >
-            Claude Code
-          </button>
-        </div>
-      </div>
-
-      {/* View Switcher */}
-      <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-1.5 flex items-center gap-1.5">
-        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mr-2 select-none">View:</span>
-        <button
-          type="button"
-          onClick={() => setMainView('inspector')}
-          className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all duration-200 select-none ${
-            mainView === 'inspector'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          Inspector
-        </button>
-        <button
-          type="button"
-          onClick={() => setMainView('topology')}
-          className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all duration-200 select-none flex items-center gap-1.5 ${
-            mainView === 'topology'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <span>Topology</span>
-          {packageSummary && (
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md badge-brand font-semibold">
-              {packageSummary.found_files_count + packageSummary.missing_files_count}
-            </span>
-          )}
-        </button>
       </div>
 
       {/* Main layout */}
@@ -688,8 +633,6 @@ export default function App() {
             isResolving={isResolving}
           />
         )}
-        {mainView === 'inspector' ? (
-          <>
         {/* Left: Editor Workspace */}
         <div className="w-1/2 flex flex-col min-h-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
           {/* Editor toolbar */}
@@ -723,7 +666,7 @@ export default function App() {
               </span>
               <button
                 type="button"
-                onClick={() => loadExample(false)}
+                onClick={() => loadExample('valid')}
                 className="px-2.5 py-1 rounded-md text-xs font-medium border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 active:scale-95 transition-all"
                 title="Load a valid agentskills.io example"
               >
@@ -731,11 +674,27 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={() => loadExample(true)}
+                onClick={() => loadExample('broken')}
                 className="px-2.5 py-1 rounded-md text-xs font-medium border border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20 active:scale-95 transition-all"
                 title="Load a skill with intentional schema and prompt flaws"
               >
                 ✗ Broken
+              </button>
+              <button
+                type="button"
+                onClick={() => loadExample('cc-valid')}
+                className="px-2.5 py-1 rounded-md text-xs font-medium border border-indigo-500/25 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20 active:scale-95 transition-all"
+                title="Load a valid Claude Code plugin skill example (switches to Claude Code mode)"
+              >
+                ✓ CC Valid
+              </button>
+              <button
+                type="button"
+                onClick={() => loadExample('cc-broken')}
+                className="px-2.5 py-1 rounded-md text-xs font-medium border border-orange-500/25 bg-orange-500/10 text-orange-700 dark:text-orange-300 hover:bg-orange-500/20 active:scale-95 transition-all"
+                title="Load a broken Claude Code plugin skill example (switches to Claude Code mode)"
+              >
+                ✗ CC Broken
               </button>
 
               {repairPlan?.diff.has_changes && (
@@ -978,7 +937,6 @@ export default function App() {
                 onApplyFix={handleApplyFix}
                 packageSummary={packageSummary}
                 onSelectFile={handleSelectFile}
-                lintingMode={lintingMode}
               />
             )}
 
@@ -1054,18 +1012,6 @@ export default function App() {
             )}
           </div>
         </div>
-          </>
-        ) : (
-          <TopologyView
-            packageSummary={packageSummary}
-            selectedSkillPath={selectedSkillPath}
-            findings={staticResult?.findings}
-            skillContent={content}
-            baseDir={baseDir.trim() || undefined}
-            isDark={isDark}
-            onSelectFile={handleSelectFile}
-          />
-        )}
       </div>
 
       {/* Slide-over reference file drawer */}
