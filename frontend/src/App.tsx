@@ -23,7 +23,7 @@ import { TrajectoryReport } from './components/TrajectoryReport'
 import { ReferenceFileDrawer } from './components/ReferenceFileDrawer'
 import { FileTreePanel } from './components/FileTreePanel'
 import { TopologyView } from './components/TopologyView'
-import { VALID_SKILL_EXAMPLE, BROKEN_SKILL_EXAMPLE } from './examples'
+import { VALID_SKILL_EXAMPLE, BROKEN_SKILL_EXAMPLE, CC_VALID_SKILL_EXAMPLE, CC_BROKEN_SKILL_EXAMPLE } from './examples'
 import { useTheme } from './hooks/useTheme'
 import { applyFix } from './utils/applyFix'
 
@@ -171,6 +171,7 @@ export default function App() {
 
   // base_dir for validators = skill's own directory (set by resolveSkill)
   const [baseDir, setBaseDir] = useState<string>('')
+  const [lintingMode, setLintingMode] = useState<'standard' | 'claude-code'>('standard')
   const [packageSummary, setPackageSummary] = useState<SkillPackageSummary | null>(null)
 
   // Reference file drawer
@@ -305,7 +306,7 @@ export default function App() {
       if (!cancelled) setStaticLoading(true)
     })
 
-    validateStatic(debouncedContent, baseDir.trim() || undefined)
+    validateStatic(debouncedContent, baseDir.trim() || undefined, lintingMode)
       .then(result => {
         if (!cancelled) {
           setStaticResult(result)
@@ -400,7 +401,7 @@ export default function App() {
     setActiveTab('llm')
     llmRunContentRef.current = content
     try {
-      const result = await validateLLM(content, providerConfig, baseDir.trim() || undefined)
+      const result = await validateLLM(content, providerConfig, baseDir.trim() || undefined, lintingMode)
       setLlmResult(result)
       if (result.package) {
         setPackageSummary(result.package)
@@ -451,8 +452,17 @@ export default function App() {
 
   // ── Load examples ────────────────────────────────────────────────────────
 
-  const loadExample = (broken: boolean) => {
-    setContent(broken ? BROKEN_SKILL_EXAMPLE : VALID_SKILL_EXAMPLE)
+  const loadExample = (kind: 'valid' | 'broken' | 'cc-valid' | 'cc-broken') => {
+    const examples = {
+      'valid': VALID_SKILL_EXAMPLE,
+      'broken': BROKEN_SKILL_EXAMPLE,
+      'cc-valid': CC_VALID_SKILL_EXAMPLE,
+      'cc-broken': CC_BROKEN_SKILL_EXAMPLE,
+    }
+    setContent(examples[kind])
+    if (kind === 'cc-valid' || kind === 'cc-broken') {
+      setLintingMode('claude-code')
+    }
     setLlmResult(null)
     setLlmError(null)
     setLlmContentStale(false)
@@ -610,6 +620,35 @@ export default function App() {
             Scan failed
           </div>
         )}
+
+        {/* Linting Mode Toggle */}
+        <div className="shrink-0 flex items-center gap-1 ml-auto pl-3 border-l border-slate-200 dark:border-slate-700">
+          <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mr-1 select-none whitespace-nowrap">Mode:</span>
+          <button
+            type="button"
+            onClick={() => setLintingMode('standard')}
+            title="Standard: validates against the base agentskills.io spec"
+            className={`px-2.5 py-1 rounded-l-md text-[11px] font-semibold border transition-all select-none ${
+              lintingMode === 'standard'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+            }`}
+          >
+            Agent Skills
+          </button>
+          <button
+            type="button"
+            onClick={() => setLintingMode('claude-code')}
+            title="Claude Code / Plugin: also accepts disable-model-invocation, context, model, effort, argument-hint, user-invocable, background and list-form allowed-tools"
+            className={`px-2.5 py-1 rounded-r-md text-[11px] font-semibold border-t border-r border-b transition-all select-none ${
+              lintingMode === 'claude-code'
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+            }`}
+          >
+            Claude Code
+          </button>
+        </div>
       </div>
 
       {/* View Switcher */}
@@ -693,7 +732,7 @@ export default function App() {
               </span>
               <button
                 type="button"
-                onClick={() => loadExample(false)}
+                onClick={() => loadExample('valid')}
                 className="px-2.5 py-1 rounded-md text-xs font-medium border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 active:scale-95 transition-all"
                 title="Load a valid agentskills.io example"
               >
@@ -701,11 +740,27 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={() => loadExample(true)}
+                onClick={() => loadExample('broken')}
                 className="px-2.5 py-1 rounded-md text-xs font-medium border border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20 active:scale-95 transition-all"
                 title="Load a skill with intentional schema and prompt flaws"
               >
                 ✗ Broken
+              </button>
+              <button
+                type="button"
+                onClick={() => loadExample('cc-valid')}
+                className="px-2.5 py-1 rounded-md text-xs font-medium border border-indigo-500/25 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20 active:scale-95 transition-all"
+                title="Load a valid Claude Code plugin skill example (switches to Claude Code mode)"
+              >
+                ✓ CC Valid
+              </button>
+              <button
+                type="button"
+                onClick={() => loadExample('cc-broken')}
+                className="px-2.5 py-1 rounded-md text-xs font-medium border border-orange-500/25 bg-orange-500/10 text-orange-700 dark:text-orange-300 hover:bg-orange-500/20 active:scale-95 transition-all"
+                title="Load a broken Claude Code plugin skill example (switches to Claude Code mode)"
+              >
+                ✗ CC Broken
               </button>
 
               {repairPlan?.diff.has_changes && (
@@ -948,6 +1003,7 @@ export default function App() {
                 onApplyFix={handleApplyFix}
                 packageSummary={packageSummary}
                 onSelectFile={handleSelectFile}
+                lintingMode={lintingMode}
               />
             )}
 

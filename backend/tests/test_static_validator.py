@@ -309,3 +309,148 @@ See `references/huge.md`.
         assert finding is not None
         assert finding.status == RuleStatus.WARN
 
+
+# ── Claude Code / Plugin linting mode tests ───────────────────────────────────
+
+class TestClaudeCodeMode:
+    """Tests for mode='claude-code' linting."""
+
+    CC_SKILL = """---
+name: deploy-app
+description: Deploy the application to production. Use when the user asks to ship or release.
+disable-model-invocation: true
+user-invocable: true
+argument-hint: "[env]"
+context: fork
+model: sonnet
+effort: high
+background: false
+allowed-tools:
+  - Bash(git *)
+  - Read
+---
+Run tests, then deploy to $ARGUMENTS.
+"""
+
+    def test_cc_fields_no_warn_in_claude_code_mode(self):
+        doc = parse_skill_md(self.CC_SKILL)
+        report = run_static_validation(doc, mode="claude-code")
+        unknown = next((f for f in report.findings if f.rule == "frontmatter.unknown-fields"), None)
+        assert unknown is None, "Claude Code fields must not warn in claude-code mode"
+
+    def test_cc_fields_warn_in_standard_mode(self):
+        doc = parse_skill_md(self.CC_SKILL)
+        report = run_static_validation(doc, mode="standard")
+        unknown = next((f for f in report.findings if f.rule == "frontmatter.unknown-fields"), None)
+        assert unknown is not None
+        assert unknown.status == RuleStatus.WARN
+        for field in ("disable-model-invocation", "context", "model"):
+            assert field in unknown.message
+
+    def test_allowed_tools_list_passes_in_claude_code_mode(self):
+        doc = parse_skill_md(self.CC_SKILL)
+        report = run_static_validation(doc, mode="claude-code")
+        at = next((f for f in report.findings if f.rule == "allowed-tools.valid"), None)
+        assert at is not None
+        assert at.status == RuleStatus.PASS
+        assert "list" in at.message.lower()
+
+    def test_allowed_tools_list_fails_in_standard_mode(self):
+        doc = parse_skill_md(self.CC_SKILL)
+        report = run_static_validation(doc, mode="standard")
+        at = next((f for f in report.findings if f.rule == "allowed-tools.type"), None)
+        assert at is not None
+        assert at.status == RuleStatus.FAIL
+
+    def test_cc_pass_finding_emitted_for_recognised_fields(self):
+        doc = parse_skill_md(self.CC_SKILL)
+        report = run_static_validation(doc, mode="claude-code")
+        cc_pass = next((f for f in report.findings if f.rule == "frontmatter.claude-code-fields"), None)
+        assert cc_pass is not None
+        assert cc_pass.status == RuleStatus.PASS
+        assert "disable-model-invocation" in cc_pass.message
+
+    def test_truly_unknown_fields_still_warn_in_claude_code_mode(self):
+        content = """---
+name: deploy-app
+description: Deploy. Use when shipping.
+some-custom-field: foo
+---
+Body here.
+"""
+        doc = parse_skill_md(content)
+        report = run_static_validation(doc, mode="claude-code")
+        unknown = next((f for f in report.findings if f.rule == "frontmatter.unknown-fields"), None)
+        assert unknown is not None
+        assert "some-custom-field" in unknown.message
+
+    def test_allowed_tools_string_still_passes_in_claude_code_mode(self):
+        content = """---
+name: my-skill
+description: Does something. Use when needed.
+allowed-tools: Bash(git *) Read Write
+---
+Instructions here.
+"""
+        doc = parse_skill_md(content)
+        report = run_static_validation(doc, mode="claude-code")
+        at = next((f for f in report.findings if "allowed-tools" in f.rule), None)
+        assert at is not None
+        assert at.status == RuleStatus.PASS
+
+    def test_mixed_non_string_list_fails_in_claude_code_mode(self):
+        import yaml
+        raw_frontmatter = "name: s\ndescription: d. Use when x.\nallowed-tools:\n  - Bash\n  - 123\n"
+        content = f"---\n{raw_frontmatter}---\nBody.\n"
+        doc = parse_skill_md(content)
+        report = run_static_validation(doc, mode="claude-code")
+        at = next((f for f in report.findings if f.rule == "allowed-tools.type"), None)
+        assert at is not None
+        assert at.status == RuleStatus.FAIL
+
+
+class TestFolderNameCheck:
+    """Tests for name.folder-match rule."""
+
+    def test_matching_folder_name_no_warning(self, tmp_path):
+        skill_dir = tmp_path / "my-skill"
+        skill_dir.mkdir()
+        content = """---
+name: my-skill
+description: Does a thing. Use when needed.
+---
+Body.
+"""
+        doc = parse_skill_md(content)
+        report = run_static_validation(doc, base_dir=skill_dir)
+        folder_finding = next((f for f in report.findings if f.rule == "name.folder-match"), None)
+        assert folder_finding is None
+
+    def test_mismatched_folder_name_warns(self, tmp_path):
+        skill_dir = tmp_path / "wrong-folder"
+        skill_dir.mkdir()
+        content = """---
+name: other-name
+description: Does a thing. Use when needed.
+---
+Body.
+"""
+        doc = parse_skill_md(content)
+        report = run_static_validation(doc, base_dir=skill_dir)
+        folder_finding = next((f for f in report.findings if f.rule == "name.folder-match"), None)
+        assert folder_finding is not None
+        assert folder_finding.status == RuleStatus.WARN
+        assert "wrong-folder" in folder_finding.message
+        assert "other-name" in folder_finding.message
+
+    def test_no_base_dir_skips_folder_check(self):
+        content = """---
+name: my-skill
+description: Does a thing. Use when needed.
+---
+Body.
+"""
+        doc = parse_skill_md(content)
+        report = run_static_validation(doc)  # no base_dir
+        folder_finding = next((f for f in report.findings if f.rule == "name.folder-match"), None)
+        assert folder_finding is None

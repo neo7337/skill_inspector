@@ -17,6 +17,7 @@ export interface StaticReportProps {
   isLoading: boolean
   isDark?: boolean
   packageSummary?: SkillPackageSummary | null
+  lintingMode?: 'standard' | 'claude-code'
   onSelectFile?: (file: ResolvedFileReference | ReferencedFile) => void
   onApplyFix?: (fix: ApplyableFix, resolvedRule?: string) => void
 }
@@ -40,6 +41,7 @@ export function StaticReport({
   result,
   isLoading,
   packageSummary,
+  lintingMode = 'standard',
   onSelectFile,
   onApplyFix,
 }: StaticReportProps) {
@@ -161,7 +163,10 @@ export function StaticReport({
   }
 
   const groups = groupByDimension(result.findings)
-  const allDims = Object.keys(groups)
+  // Separate Claude Code dimension from standard rule accordion
+  const claudeCodeFindings = groups['Claude Code'] ?? []
+  const filteredGroups = Object.fromEntries(Object.entries(groups).filter(([k]) => k !== 'Claude Code'))
+  const allDims = Object.keys(filteredGroups)
   const failCount = result.findings.filter(f => f.status === 'fail').length
   const warnCount = result.findings.filter(f => f.status === 'warn').length
   const passCount = result.findings.filter(f => f.status === 'pass').length
@@ -169,9 +174,37 @@ export function StaticReport({
 
   const pkg = packageSummary ?? result.package
   const hasTokenInfo = pkg || result.skill_tokens || (result.referenced_files && result.referenced_files.length > 0)
+  const recognisedCCFields = claudeCodeFindings.flatMap(f =>
+    f.message.match(/Recognised Claude Code frontmatter fields: \[([^\]]+)\]/)
+      ? (f.message.match(/Recognised Claude Code frontmatter fields: \[([^\]]+)\]/)![1]
+          .split(',').map(s => s.trim().replace(/'/g, '')))
+      : []
+  )
 
   return (
     <div className="space-y-4">
+      {/* Claude Code mode banner */}
+      {lintingMode === 'claude-code' && (
+        <div className="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 px-4 py-3 flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-indigo-600 dark:text-indigo-400 font-semibold text-xs">🧩 Claude Code / Plugin mode</span>
+            <span className="text-[11px] text-indigo-500 dark:text-indigo-400">Claude Code-specific fields accepted — no false warnings</span>
+          </div>
+          {recognisedCCFields.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-0.5">
+              {recognisedCCFields.map(field => (
+                <span
+                  key={field}
+                  className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-mono font-medium bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700"
+                >
+                  {field}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {hasTokenInfo && (
         <SkillTokenBreakdown
           tokens={result.skill_tokens}
@@ -239,7 +272,7 @@ export function StaticReport({
 
       {/* Per-dimension accordion */}
       <div className="space-y-2.5">
-        {Object.entries(groups).map(([dim, findings]) => {
+        {Object.entries(filteredGroups).map(([dim, findings]) => {
           const status = dimensionStatus(findings)
           const isExpanded = expandedDims.has(dim)
           const dimFails = findings.filter(f => f.status === 'fail').length

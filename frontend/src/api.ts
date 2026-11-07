@@ -19,10 +19,12 @@ const api = axios.create({
 export async function validateStatic(
   content: string,
   baseDir?: string,
+  mode: 'standard' | 'claude-code' = 'standard',
 ): Promise<StaticValidationResult> {
   const { data } = await api.post<StaticValidationResult>('/validate/static', {
     content,
     base_dir: baseDir || null,
+    mode,
   })
   return data
 }
@@ -31,6 +33,7 @@ export async function validateLLM(
   content: string,
   config: ProviderConfig,
   baseDir?: string,
+  mode: 'standard' | 'claude-code' = 'standard',
 ): Promise<LLMValidationResult> {
   const { data } = await api.post<LLMValidationResult>('/validate/llm', {
     content,
@@ -40,6 +43,7 @@ export async function validateLLM(
     base_url: config.base_url || null,
     base_dir: baseDir || null,
     include_references: Boolean(config.include_references),
+    mode,
   })
   return data
 }
