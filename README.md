@@ -4,6 +4,10 @@ A web-based validation studio and CLI companion for [agentskills.io](https://age
 
 ---
 
+<img src="./assets/usage_demo.gif" alt="App Demo" width="500"/>
+
+---
+
 ## Table of Contents
 
 - [Features](#features)
