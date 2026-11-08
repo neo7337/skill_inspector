@@ -110,9 +110,9 @@ Install the latest version via the automated installer:
 curl -sSL https://raw.githubusercontent.com/neo7337/skill_inspector/main/install/install.sh | bash
 ```
 
-Or install a specific version (e.g., v0.0.7):
+Or install a specific version (e.g., v0.0.8):
 ```bash
-curl -sSL https://raw.githubusercontent.com/neo7337/skill_inspector/main/install/install.sh | bash -s -- v0.0.7
+curl -sSL https://raw.githubusercontent.com/neo7337/skill_inspector/main/install/install.sh | bash -s -- v0.0.8
 ```
 
 Alternatively, install from a local checkout:
