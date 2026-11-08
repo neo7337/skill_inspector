@@ -9,20 +9,17 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from app.package import (
-    BINARY_EXTENSIONS,
-    is_binary_file,
-    resolve_file_reference,
-    compute_package_token_economy,
     ResolvedFileReference,
     SkillPackage,
-    PackageTokenEconomy,
+    compute_package_token_economy,
+    resolve_file_reference,
 )
-from app.parser import FileReference, parse_skill_md, ParseError
+from app.parser import parse_skill_md
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +48,10 @@ class FileTreeNode(BaseModel):
     name: str
     path: str                                    # relative to project root
     type: Literal["file", "dir"]
-    children: list["FileTreeNode"] = Field(default_factory=list)
+    children: list[FileTreeNode] = Field(default_factory=list)
     is_skill_file: bool = False                  # True if detected as a valid SKILL.md
-    size_bytes: Optional[int] = None
-    extension: Optional[str] = None
+    size_bytes: int | None = None
+    extension: str | None = None
 
 
 FileTreeNode.model_rebuild()  # required for self-referential model

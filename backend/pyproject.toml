@@ -4,9 +4,22 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "skill-inspector"
-version = "0.0.3"
-description = "Skill Inspector CLI tool"
+version = "0.0.7"
+description = "Static validator, LLM judge and trajectory profiler for agent skills (SKILL.md)"
+license = {text = "MIT"}
+authors = [{name = "Aditya Kumar"}]
+keywords = ["agent-skills", "claude", "llm", "linter", "validation"]
+requires-python = ">=3.10"
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Environment :: Console",
+]
 dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "python-dotenv>=1.0.0",
+    "python-multipart>=0.0.20",
     "typer>=0.12.0",
     "rich>=13.0.0",
     "pydantic>=2.0.0",
@@ -22,3 +35,7 @@ skill-inspector = "app.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["app*"]
+
+[project.urls]
+Homepage = "https://github.com/neo7337/skill_inspector"
+Issues = "https://github.com/neo7337/skill_inspector/issues"

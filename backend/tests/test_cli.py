@@ -1,7 +1,8 @@
 """Unit tests for the Skill Inspector CLI."""
 from pathlib import Path
-from typer.testing import CliRunner
+
 from app.cli import app
+from typer.testing import CliRunner
 
 runner = CliRunner()
 

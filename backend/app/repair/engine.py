@@ -6,12 +6,19 @@ from __future__ import annotations
 
 import re
 from typing import Any
+
 import yaml
 from pydantic import BaseModel
 
-from app.parser import SkillDocument, parse_skill_md, ParseError
-from app.validators.static import NAME_MAX_LEN, DESCRIPTION_MAX_LEN, COMPATIBILITY_MAX_LEN
-from app.repair.diff_utils import compute_unified_diff, parse_diff_to_structured, DiffReport
+from app.repair.diff_utils import (
+    DiffReport,
+    parse_diff_to_structured,
+)
+from app.validators.static import (
+    COMPATIBILITY_MAX_LEN,
+    DESCRIPTION_MAX_LEN,
+    NAME_MAX_LEN,
+)
 
 
 class RepairItem(BaseModel):

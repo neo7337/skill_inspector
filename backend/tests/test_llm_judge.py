@@ -2,16 +2,17 @@
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
-import pytest
 
+import pytest
+from app.package import (
+    ReferenceFileStatus,
+    ResolvedFileReference,
+)
 from app.parser import parse_skill_md
-from app.package import ReferenceFileStatus, ResolvedFileReference, resolve_skill_package
 from app.validators.llm_judge import (
     ProviderConfig,
     assemble_referenced_context,
     run_llm_validation,
-    USER_PROMPT_TEMPLATE,
-    USER_PROMPT_WITH_REFS_TEMPLATE,
 )
 
 SAMPLE_LLM_RESPONSE = json.dumps({

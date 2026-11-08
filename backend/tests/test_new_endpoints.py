@@ -1,7 +1,7 @@
 """Integration tests for new endpoints: repair, scenarios, and profiler."""
 import pytest
-from httpx import AsyncClient, ASGITransport
 from app.main import app
+from httpx import ASGITransport, AsyncClient
 
 VALID_SKILL = """\
 ---

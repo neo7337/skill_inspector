@@ -1,20 +1,19 @@
 """Unit tests for Skill Package resolution and token economy accounting."""
 from pathlib import Path
-import pytest
 
-from app.parser import FileReference, parse_skill_md
+import pytest
 from app.package import (
-    ReferenceFileStatus,
-    ResolvedFileReference,
-    PackageTokenEconomy,
-    SkillPackage,
-    is_binary_file,
-    resolve_file_reference,
-    compute_package_token_economy,
-    resolve_skill_package,
     PEAK_TOKEN_CAUTION_THRESHOLD,
     PEAK_TOKEN_WARN_THRESHOLD,
+    ReferenceFileStatus,
+    ResolvedFileReference,
+    SkillPackage,
+    compute_package_token_economy,
+    is_binary_file,
+    resolve_file_reference,
+    resolve_skill_package,
 )
+from app.parser import FileReference, parse_skill_md
 
 
 @pytest.fixture

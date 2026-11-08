@@ -1,5 +1,7 @@
 # Skill Inspector
 
+[![CI](https://github.com/neo7337/skill_inspector/actions/workflows/ci.yml/badge.svg)](https://github.com/neo7337/skill_inspector/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A web-based validation studio and CLI companion for [agentskills.io](https://agentskills.io) format `SKILL.md` skill packages. Combines static structural validation, on-disk reference resolution, multi-tier context token economics, LLM-as-a-Judge behavioral evaluation, interactive auto-repair, synthetic red-teaming scenario generation, and execution trajectory profiling.
 
 ---
@@ -61,6 +63,8 @@ A web-based validation studio and CLI companion for [agentskills.io](https://age
 
 ```bash
 # Install all dependencies (backend virtualenv + frontend npm modules)
+
+[![CI](https://github.com/neo7337/skill_inspector/actions/workflows/ci.yml/badge.svg)](https://github.com/neo7337/skill_inspector/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 make install
 
 # Configure frontend environment (optional / defaults)
@@ -105,9 +109,9 @@ Install the latest version via the automated installer:
 curl -sSL https://raw.githubusercontent.com/neo7337/skill_inspector/main/install/install.sh | bash
 ```
 
-Or install a specific version (e.g., v1.1.0):
+Or install a specific version (e.g., v0.0.7):
 ```bash
-curl -sSL https://raw.githubusercontent.com/neo7337/skill_inspector/main/install/install.sh | bash -s -- v1.1.0
+curl -sSL https://raw.githubusercontent.com/neo7337/skill_inspector/main/install/install.sh | bash -s -- v0.0.7
 ```
 
 Alternatively, install directly from local repository:

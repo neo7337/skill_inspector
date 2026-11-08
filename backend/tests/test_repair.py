@@ -1,7 +1,9 @@
 """Tests for deterministic and diff repair engine."""
-import pytest
-from app.repair import DeterministicRepairEngine, compute_unified_diff, parse_diff_to_structured
-
+from app.repair import (
+    DeterministicRepairEngine,
+    compute_unified_diff,
+    parse_diff_to_structured,
+)
 
 BROKEN_FM = """\
 name: My_Invalid--Skill Name!

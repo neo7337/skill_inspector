@@ -4,20 +4,25 @@ AI Skill Validator — FastAPI Backend
 from __future__ import annotations
 
 import logging
-
 from typing import Any
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from app.package import resolve_skill_package
 from app.parser import ParseError, parse_skill_md
-from app.package import resolve_skill_package, SkillPackage
-from app.validators.static import run_static_validation
-from app.validators.llm_judge import ProviderConfig, run_llm_validation
+from app.profiler import TrajectoryProfiler
 from app.repair import DeterministicRepairEngine, LLMRepairEngine
-from app.scenarios import ScenarioGenerator, export_as_json, export_as_pytest, export_as_markdown
+from app.scenarios import (
+    ScenarioGenerator,
+    export_as_json,
+    export_as_markdown,
+    export_as_pytest,
+)
 from app.scenarios.models import ScenarioSuite
-from app.profiler import TrajectoryProfiler, parse_trace_from_raw
+from app.validators.llm_judge import ProviderConfig, run_llm_validation
+from app.validators.static import run_static_validation
 
 logger = logging.getLogger(__name__)
 

@@ -4,27 +4,30 @@ Command-line companion for validating, auto-fixing, profiling, and generating te
 """
 from __future__ import annotations
 
-import json
+import asyncio
 import os
-from app import __version__
 from pathlib import Path
-from typing import Optional
+
 import typer
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
 from rich.syntax import Syntax
-import asyncio
+from rich.table import Table
 
-from app.config import load_config, init_default_config, CONFIG_FILE, CLIConfig
-from app.parser import parse_skill_md, ParseError
-from app.package import resolve_skill_package, ReferenceFileStatus, SkillPackage
-from app.validators.static import run_static_validation
-from app.validators.llm_judge import ProviderConfig, run_llm_validation
-from app.repair import DeterministicRepairEngine, LLMRepairEngine
+from app import __version__
+from app.config import CONFIG_FILE, CLIConfig, init_default_config, load_config
+from app.package import ReferenceFileStatus, SkillPackage, resolve_skill_package
+from app.parser import ParseError, parse_skill_md
 from app.profiler import TrajectoryProfiler
-from app.scenarios import ScenarioGenerator, export_as_json, export_as_pytest, export_as_markdown
-from importlib.metadata import version
+from app.repair import DeterministicRepairEngine, LLMRepairEngine
+from app.scenarios import (
+    ScenarioGenerator,
+    export_as_json,
+    export_as_markdown,
+    export_as_pytest,
+)
+from app.validators.llm_judge import ProviderConfig, run_llm_validation
+from app.validators.static import run_static_validation
 
 app = typer.Typer(
     name="skill-inspector",
@@ -39,11 +42,11 @@ def version_callback(value: bool):
         raise typer.Exit()
 
 def resolve_llm_credentials(
-    provider: Optional[str],
-    model: Optional[str],
-    api_key: Optional[str],
+    provider: str | None,
+    model: str | None,
+    api_key: str | None,
     cfg: CLIConfig,
-) -> tuple[str, str, Optional[str]]:
+) -> tuple[str, str, str | None]:
     """Resolve provider, model, and API key using CLI flags, config.json, and env vars."""
     resolved_provider = provider or cfg.llm.default_provider or "openai"
     resolved_model = model or cfg.llm.default_model or "gpt-4o"
@@ -64,18 +67,17 @@ def root_callback(
     )
 ):
     """Skill Inspector CLI"""
-    pass
 
 @app.command("validate")
 def validate_command(
     file: Path = typer.Argument(..., help="Path to SKILL.md file", exists=True),
-    base_dir: Optional[Path] = typer.Option(
+    base_dir: Path | None = typer.Option(
         None, "--base-dir", "-d", help="Base directory of the skill package (defaults to parent folder of SKILL.md or config.json)"
     ),
     llm: bool = typer.Option(False, "--llm", help="Also run LLM-as-a-Judge validation"),
-    provider: Optional[str] = typer.Option(None, "--provider", help="LLM provider (openai, anthropic, ollama)"),
-    model: Optional[str] = typer.Option(None, "--model", help="LLM model name"),
-    api_key: Optional[str] = typer.Option(None, "--api-key", help="API key for provider"),
+    provider: str | None = typer.Option(None, "--provider", help="LLM provider (openai, anthropic, ollama)"),
+    model: str | None = typer.Option(None, "--model", help="LLM model name"),
+    api_key: str | None = typer.Option(None, "--api-key", help="API key for provider"),
     mode: str = typer.Option("standard", "--mode", "-m", help="Linting mode: 'standard' (agentskills.io spec) or 'claude-code' (also accepts Claude Code / plugin fields)"),
 ):
     """Run structural and quality validation on a SKILL.md file."""
@@ -95,7 +97,7 @@ def validate_command(
 
     configured_base = Path(cli_cfg.validation.base_dir) if cli_cfg.validation.base_dir else None
     resolved_base = (base_dir or configured_base or file.parent).resolve()
-    pkg: Optional[SkillPackage] = None
+    pkg: SkillPackage | None = None
     if resolved_base.is_dir():
         try:
             pkg = resolve_skill_package(resolved_base, skill_content=content)
@@ -202,9 +204,9 @@ def fix_command(
     safe_only: bool = typer.Option(True, "--safe/--all", help="Apply only safe deterministic repairs"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Display unified diff without changing file"),
     llm_refactor: bool = typer.Option(False, "--llm", help="Use LLM to refactor ambiguous instructions"),
-    provider: Optional[str] = typer.Option(None, "--provider", help="LLM provider for refactor"),
-    model: Optional[str] = typer.Option(None, "--model", help="LLM model name"),
-    api_key: Optional[str] = typer.Option(None, "--api-key", help="API key for provider"),
+    provider: str | None = typer.Option(None, "--provider", help="LLM provider for refactor"),
+    model: str | None = typer.Option(None, "--model", help="LLM model name"),
+    api_key: str | None = typer.Option(None, "--api-key", help="API key for provider"),
 ):
     """Automatically repair frontmatter schema errors and refactor instructions."""
     cli_cfg = load_config()
@@ -248,9 +250,9 @@ def fix_command(
 @app.command("profile")
 def profile_command(
     trace_file: Path = typer.Argument(..., help="Path to trajectory trace JSON or JSONL", exists=True),
-    skill_file: Optional[Path] = typer.Option(None, "--skill", "-s", help="Path to SKILL.md content for bloat analysis"),
-    baseline: Optional[int] = typer.Option(None, "--baseline", "-b", help="Expected optimal step budget"),
-    base_dir: Optional[Path] = typer.Option(None, "--base-dir", "-d", help="Path to skill package root directory"),
+    skill_file: Path | None = typer.Option(None, "--skill", "-s", help="Path to SKILL.md content for bloat analysis"),
+    baseline: int | None = typer.Option(None, "--baseline", "-b", help="Expected optimal step budget"),
+    base_dir: Path | None = typer.Option(None, "--base-dir", "-d", help="Path to skill package root directory"),
 ):
     """Profile agent execution path against baselines, flagging redundancy and token bloat."""
     cli_cfg = load_config()
@@ -343,12 +345,12 @@ def profile_command(
 @app.command("generate-tests")
 def generate_tests_command(
     file: Path = typer.Argument(..., help="Path to SKILL.md file", exists=True),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Destination file for generated test suite"),
-    format: Optional[str] = typer.Option(None, "--format", "-f", help="Output format: json, pytest, markdown"),
-    count: Optional[int] = typer.Option(None, "--count", "-c", help="Number of scenarios to generate"),
-    provider: Optional[str] = typer.Option(None, "--provider", help="LLM provider (openai, anthropic, ollama)"),
-    model: Optional[str] = typer.Option(None, "--model", help="LLM model name"),
-    api_key: Optional[str] = typer.Option(None, "--api-key", help="API key for provider"),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Destination file for generated test suite"),
+    format: str | None = typer.Option(None, "--format", "-f", help="Output format: json, pytest, markdown"),
+    count: int | None = typer.Option(None, "--count", "-c", help="Number of scenarios to generate"),
+    provider: str | None = typer.Option(None, "--provider", help="LLM provider (openai, anthropic, ollama)"),
+    model: str | None = typer.Option(None, "--model", help="LLM model name"),
+    api_key: str | None = typer.Option(None, "--api-key", help="API key for provider"),
 ):
     """Generate 10–20 realistic synthetic test scenarios (Happy Path, Adversarial, Tool Failure)."""
     cli_cfg = load_config()
@@ -398,7 +400,7 @@ def version_command():
 def help_command():
     """Show help message."""
     console.print(f"Skill Inspector Version: [bold green]{__version__}[/]")
-    console.print(f"Use [bold]--help[/bold] for more information.")
+    console.print("Use [bold]--help[/bold] for more information.")
 
 @app.command("config")
 def config_command(

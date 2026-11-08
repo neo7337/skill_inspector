@@ -9,7 +9,7 @@ import logging
 import posixpath
 from enum import Enum
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -44,12 +44,12 @@ class ResolvedFileReference(BaseModel):
     relative_path: str
     kind: Literal["reference", "script", "asset", "other"]
     status: ReferenceFileStatus
-    absolute_path: Optional[str] = None
+    absolute_path: str | None = None
     size_bytes: int = 0
     line_count: int = 0
     token_count: int = 0
     is_binary: bool = False
-    content_preview: Optional[str] = None
+    content_preview: str | None = None
     # Other resolved package files that this file links to / imports (relative paths)
     references: list[str] = Field(default_factory=list)
 
@@ -293,7 +293,7 @@ def compute_package_token_economy(
 
 def resolve_skill_package(
     base_dir: Path | str,
-    skill_content: Optional[str] = None,
+    skill_content: str | None = None,
 ) -> SkillPackage:
     """
     Discovers, parses, resolves and audits an entire skill package from a directory.

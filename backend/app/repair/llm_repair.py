@@ -5,14 +5,17 @@ with explicit boundaries and token-efficient formatting.
 """
 from __future__ import annotations
 
-import json
 import logging
 import re
-from typing import Literal
+
 from pydantic import BaseModel
 
-from app.validators.llm_judge import ProviderConfig, call_provider_chat, extract_json_from_text
-from app.repair.diff_utils import parse_diff_to_structured, DiffReport
+from app.repair.diff_utils import DiffReport, parse_diff_to_structured
+from app.validators.llm_judge import (
+    ProviderConfig,
+    call_provider_chat,
+    extract_json_from_text,
+)
 
 logger = logging.getLogger(__name__)
 

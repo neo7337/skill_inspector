@@ -10,12 +10,12 @@ import logging
 import re
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from app.package import PEAK_TOKEN_WARN_THRESHOLD, ReferenceFileStatus, SkillPackage
 from app.parser import SkillDocument
-from app.package import ReferenceFileStatus, SkillPackage, PEAK_TOKEN_WARN_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
@@ -67,10 +67,10 @@ class Finding(BaseModel):
     message: str
     suggestion: str
     # Structured fix fields for one-click Apply in the UI
-    fix_snippet: Optional[str] = None   # ready-to-paste YAML/text snippet
-    fix_kind: Optional[FixKind] = None  # how the frontend should apply the fix
-    fix_field: Optional[str] = None     # for frontmatter_field: the key name
-    fix_replace_target: Optional[str] = None  # for text_replace: text to find
+    fix_snippet: str | None = None   # ready-to-paste YAML/text snippet
+    fix_kind: FixKind | None = None  # how the frontend should apply the fix
+    fix_field: str | None = None     # for frontmatter_field: the key name
+    fix_replace_target: str | None = None  # for text_replace: text to find
 
 
 class StaticValidationReport(BaseModel):
@@ -437,7 +437,7 @@ def _check_allowed_tools(allowed_tools: Any, mode: LintingMode = "standard") -> 
                 dimension="Schema",
                 rule="allowed-tools.type",
                 status=RuleStatus.FAIL,
-                message=f"'allowed-tools' must be a space-separated string, got list. Use Claude Code mode to allow list form.",
+                message="'allowed-tools' must be a space-separated string, got list. Use Claude Code mode to allow list form.",
                 suggestion="Format as a space-separated string: allowed-tools: Bash(git:*) Read Write",
             )]
 
@@ -454,7 +454,7 @@ def _check_allowed_tools(allowed_tools: Any, mode: LintingMode = "standard") -> 
         dimension="Schema",
         rule="allowed-tools.valid",
         status=RuleStatus.PASS,
-        message=f"'allowed-tools' is a valid string.",
+        message="'allowed-tools' is a valid string.",
         suggestion="",
     )]
 
@@ -560,7 +560,7 @@ def _check_unknown_fields(frontmatter: dict[str, Any], mode: LintingMode = "stan
     return findings
 
 
-def _check_folder_name(doc_name: Optional[str], base_dir: Optional[str | Path]) -> list[Finding]:
+def _check_folder_name(doc_name: str | None, base_dir: str | Path | None) -> list[Finding]:
     """
     Warn when the skill 'name' frontmatter value does not match the containing folder name.
     Both the official skills-ref CLI and Claude Code enforce this convention.
@@ -722,8 +722,8 @@ def _check_package_references(package: SkillPackage) -> list[Finding]:
 
 def run_static_validation(
     doc: SkillDocument,
-    base_dir: Optional[str | Path] = None,
-    package: Optional[SkillPackage] = None,
+    base_dir: str | Path | None = None,
+    package: SkillPackage | None = None,
     mode: LintingMode = "standard",
 ) -> StaticValidationReport:
     """
