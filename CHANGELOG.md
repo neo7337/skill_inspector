@@ -26,6 +26,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.7] - 2026-11-07
+
+### Added
+- **Live topology view**: n8n-style node graph of a skill package and its references, with collapsible skills in the project file tree.
+
+---
+
+## [0.0.6] - 2026-11-05
+
+### Added
+- **Persistent CLI configuration**: `~/.skill-inspector/config.json` with a `skill-inspector config` command (provider, model, API keys, base directory, profiler and scenario defaults).
+- **Project file tree**: scan a directory in the UI to browse skills and their referenced files, with a fixed reference file drawer.
+
+### Changed
+- **UI redesign**: light-first blue theme replacing the glassmorphism style.
+
+---
+
 ## [0.0.5] - 2026-10-26
 
 ### Added
