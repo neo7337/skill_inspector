@@ -1,6 +1,11 @@
 """Tests for synthetic scenario generation and exporters."""
 import pytest
-from app.scenarios import ScenarioGenerator, export_as_json, export_as_pytest, export_as_markdown
+from app.scenarios import (
+    ScenarioGenerator,
+    export_as_json,
+    export_as_markdown,
+    export_as_pytest,
+)
 
 SAMPLE_SKILL = """\
 ---

@@ -17,18 +17,18 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.parser import FileReference, SkillDocument
 from app.package import (
+    PackageTokenEconomy,
     ReferenceFileStatus,
     ResolvedFileReference,
-    PackageTokenEconomy,
     SkillPackage,
     resolve_skill_package,
 )
+from app.parser import FileReference, SkillDocument
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ class ProviderConfig(BaseModel):
 
 class LLMSuggestion(BaseModel):
     text: str                         # human-readable recommendation
-    example: Optional[str] = None     # optional rewritten snippet
+    example: str | None = None     # optional rewritten snippet
 
 
 class LLMDimensionResult(BaseModel):
@@ -97,7 +97,7 @@ class LLMReport(BaseModel):
     provider_used: str
     skill_tokens: SkillTokenEstimate = Field(default_factory=SkillTokenEstimate)
     referenced_files: list[FileReference] = Field(default_factory=list)
-    package_tokens: Optional[PackageTokenEconomy] = None
+    package_tokens: PackageTokenEconomy | None = None
     resolved_files: list[ResolvedFileReference] = Field(default_factory=list)
 
 
@@ -416,8 +416,8 @@ def _make_error_report(
 async def run_llm_validation(
     doc: SkillDocument,
     config: ProviderConfig,
-    base_dir: Optional[str | Path] = None,
-    package: Optional[SkillPackage] = None,
+    base_dir: str | Path | None = None,
+    package: SkillPackage | None = None,
 ) -> LLMReport:
     """
     Run LLM-as-a-Judge evaluation on a parsed SkillDocument.

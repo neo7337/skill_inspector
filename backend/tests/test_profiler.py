@@ -1,7 +1,5 @@
 """Tests for Trajectory & Step-Economy Profiler."""
-import pytest
 from app.profiler import TrajectoryProfiler, parse_trace_from_raw
-
 
 SAMPLE_TRACE = {
     "task_id": "test_01",

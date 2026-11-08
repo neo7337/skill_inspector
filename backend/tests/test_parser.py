@@ -1,7 +1,11 @@
 """Tests for the SKILL.md parser."""
 import pytest
-from app.parser import ParseError, SkillDocument, extract_file_references, parse_skill_md
-
+from app.parser import (
+    ParseError,
+    SkillDocument,
+    extract_file_references,
+    parse_skill_md,
+)
 
 VALID_MINIMAL = """\
 ---

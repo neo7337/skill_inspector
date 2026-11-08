@@ -1,11 +1,10 @@
 """API integration tests and LLM judge unit tests."""
 import json
-import pytest
-from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from app.main import app
-
+from httpx import ASGITransport, AsyncClient
 
 VALID_SKILL = """\
 ---
@@ -140,7 +139,7 @@ class TestLLMValidateEndpoint:
 
     async def test_ollama_no_api_key_accepted(self, client: AsyncClient):
         """Ollama config without API key should be structurally valid (no 422)."""
-        from app.validators.llm_judge import LLMReport, LLMDimensionResult
+        from app.validators.llm_judge import LLMDimensionResult, LLMReport
 
         mock_dim = LLMDimensionResult(score=80, status="pass", findings=["Good"], suggestions=[])
         mock_report = LLMReport(
@@ -164,7 +163,7 @@ class TestLLMValidateEndpoint:
 
     async def test_llm_response_structure(self, client: AsyncClient):
         """Mocked LLM call returns correct report structure."""
-        from app.validators.llm_judge import LLMReport, LLMDimensionResult
+        from app.validators.llm_judge import LLMDimensionResult, LLMReport
 
         mock_dim = LLMDimensionResult(score=80, status="pass", findings=["Good"], suggestions=[])
         mock_report = LLMReport(
@@ -178,7 +177,6 @@ class TestLLMValidateEndpoint:
             provider_used="openai",
         )
 
-        from app.validators import llm_judge
         with patch("app.main.run_llm_validation", new=AsyncMock(return_value=mock_report)):
             response = await client.post("/validate/llm", json={
                 "content": VALID_SKILL,
@@ -197,8 +195,8 @@ class TestLLMValidateEndpoint:
         assert data["overall_status"] == "pass"
 
     async def test_llm_with_base_dir_and_include_references(self, client: AsyncClient, tmp_path):
-        from app.validators.llm_judge import LLMReport, LLMDimensionResult
         from app.package import resolve_skill_package
+        from app.validators.llm_judge import LLMDimensionResult, LLMReport
 
         skill_file = tmp_path / "SKILL.md"
         skill_file.write_text(VALID_SKILL + "\nSee [guide](docs/guide.md)\n")

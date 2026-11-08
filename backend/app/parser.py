@@ -10,7 +10,6 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel
 
-
 FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---\s*\n?(.*)", re.DOTALL)
 # Matches ---\n--- (empty frontmatter, no content between delimiters)
 EMPTY_FRONTMATTER_PATTERN = re.compile(r"^---\s*\n---", re.DOTALL)

@@ -1,8 +1,9 @@
 from __future__ import annotations
+
 import json
 import os
 from pathlib import Path
-from typing import Optional, Dict
+
 from pydantic import BaseModel, Field
 
 CONFIG_DIR = Path.home() / ".skill-inspector"
@@ -11,14 +12,14 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 class LLMConfig(BaseModel):
     default_provider: str = "ollama"
     default_model: str = "llama3.1:latest"
-    api_keys: Dict[str, str] = Field(default_factory=dict)
+    api_keys: dict[str, str] = Field(default_factory=dict)
     ollama_base_url: str = "http://localhost:11434"
 
 class ValidationConfig(BaseModel):
-    base_dir: Optional[str] = None
+    base_dir: str | None = None
 
 class ProfilerConfig(BaseModel):
-    default_baseline_steps: Optional[int | str] = None
+    default_baseline_steps: int | str | None = None
 
 class ScenarioConfig(BaseModel):
     default_format: str = "json"
@@ -30,7 +31,7 @@ class CLIConfig(BaseModel):
     profiler: ProfilerConfig = Field(default_factory=ProfilerConfig)
     scenarios: ScenarioConfig = Field(default_factory=ScenarioConfig)
 
-def load_config(custom_path: Optional[Path] = None) -> CLIConfig:
+def load_config(custom_path: Path | None = None) -> CLIConfig:
     config_path = custom_path or CONFIG_FILE
     if not config_path.exists():
         return CLIConfig()

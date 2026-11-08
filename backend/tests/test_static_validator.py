@@ -1,5 +1,4 @@
 """Tests for the static validation rules engine."""
-import pytest
 from app.parser import parse_skill_md
 from app.validators.static import RuleStatus, run_static_validation
 
@@ -399,7 +398,6 @@ Instructions here.
         assert at.status == RuleStatus.PASS
 
     def test_mixed_non_string_list_fails_in_claude_code_mode(self):
-        import yaml
         raw_frontmatter = "name: s\ndescription: d. Use when x.\nallowed-tools:\n  - Bash\n  - 123\n"
         content = f"---\n{raw_frontmatter}---\nBody.\n"
         doc = parse_skill_md(content)

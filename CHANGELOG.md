@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.8] - 2026-11-08
+
+### Added
+- **Claude Code / plugin linting mode**: `skill-inspector validate --mode claude-code` and a `mode` field on the validation endpoints accept Claude Code-specific frontmatter fields and list-style `allowed-tools`; UI toggle included.
+- **Sample skills and demo**: Claude Code sample skills (`samples/cc-*`), in-UI examples and a usage demo GIF.
+- **Open-source community files**: `SECURITY.md`, `CONTRIBUTING.md` (including release steps), `CODE_OF_CONDUCT.md`, issue and pull request templates, and Dependabot configuration.
+- **Backend README**: `backend/README.md` with backend-specific setup, run and test instructions; used as the package long description.
+
+### Changed
+- **Single-source versioning**: the version now lives only in `backend/app/__init__.py`; `backend/pyproject.toml` reads it dynamically and the FastAPI app reports it (previously a stale `1.1.0`).
+- **Packaging**: removed the duplicate root `pyproject.toml`; CI builds from `backend/`. Added full package metadata, declared runtime dependencies (fastapi, uvicorn, python-dotenv, python-multipart) and set `requires-python >=3.11`.
+- **CI**: dropped the unneeded global `packages: write` permission.
+- **Lint**: applied Ruff auto-fixes across the backend.
+- **README**: removed the unsupported Google Gemini provider, fixed the local install command (`pip install -e backend`), documented project endpoints and `--mode`, refreshed the project tree and added badges.
+- `.gitignore` now excludes `.claude/`, `.env`, `.venv/`, `node_modules/` and `coverage.xml`.
+
+### Fixed
+- `samples/pdf-processing` is a real directory instead of a symlink, so it works on Windows checkouts and zip downloads.
+
+---
+
+## [0.0.7] - 2026-11-07
+
+### Added
+- **Live topology view**: n8n-style node graph of a skill package and its references, with collapsible skills in the project file tree.
+
+---
+
+## [0.0.6] - 2026-11-05
+
+### Added
+- **Persistent CLI configuration**: `~/.skill-inspector/config.json` with a `skill-inspector config` command (provider, model, API keys, base directory, profiler and scenario defaults).
+- **Project file tree**: scan a directory in the UI to browse skills and their referenced files, with a fixed reference file drawer.
+
+### Changed
+- **UI redesign**: light-first blue theme replacing the glassmorphism style.
+
+---
+
 ## [0.0.5] - 2026-10-26
 
 ### Added

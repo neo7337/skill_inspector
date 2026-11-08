@@ -1,5 +1,7 @@
 # Skill Inspector
 
+[![CI](https://github.com/neo7337/skill_inspector/actions/workflows/ci.yml/badge.svg)](https://github.com/neo7337/skill_inspector/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
+
 A web-based validation studio and CLI companion for [agentskills.io](https://agentskills.io) format `SKILL.md` skill packages. Combines static structural validation, on-disk reference resolution, multi-tier context token economics, LLM-as-a-Judge behavioral evaluation, interactive auto-repair, synthetic red-teaming scenario generation, and execution trajectory profiling.
 
 ---
@@ -24,11 +26,11 @@ A web-based validation studio and CLI companion for [agentskills.io](https://age
 - [LLM Provider Setup](#llm-provider-setup)
   - [OpenAI](#openai)
   - [Anthropic](#anthropic)
-  - [Google Gemini](#google-gemini)
   - [Ollama (local, no API key)](#ollama-local-no-api-key)
 - [Static Validation Rules](#static-validation-rules)
 - [LLM Evaluation Dimensions](#llm-evaluation-dimensions)
 - [Project Structure & Page Tree](#project-structure--page-tree)
+- [Contributing and Security](#contributing-and-security)
 - [License](#license)
 
 ---
@@ -44,7 +46,9 @@ A web-based validation studio and CLI companion for [agentskills.io](https://age
 - **LLM-as-Judge with Package Grounding** — Behavioral evaluation across Description Quality, Instruction Clarity, Scope & Boundaries, and Token Efficiency, grounded in referenced file summaries.
 - **Synthetic Scenario & Edge-Case Generator** — Automatically synthesizes 10–16 realistic scenarios across Happy Path, Adversarial, Tool Failure Modes, and Scope Boundaries, exportable to Pytest, JSON, and Markdown.
 - **Trajectory & Step-Economy Profiler** — Analyzes agent execution traces against baselines, flagging redundant file reads, search loops, error ping-pongs, and context bloat with interactive timeline visualization.
-- **Multi-Provider Support** — OpenAI, Anthropic Claude, Google Gemini, and Ollama (local models, no API key needed).
+- **Claude Code / Plugin Linting Mode** — Toggle `--mode claude-code` (CLI) or the linting-mode switch (UI) to accept Claude Code-specific frontmatter fields and list-style `allowed-tools`.
+- **Project Scanner** — Open a whole project directory, discover every skill in the file tree and resolve its references.
+- **Multi-Provider Support** — OpenAI, Anthropic Claude, and Ollama (local models, no API key needed).
 - **Skill Inspector CLI** — Full-featured command-line suite with `validate` (with rich package tables), `fix`, `profile`, and `generate-tests`.
 
 ---
@@ -61,6 +65,7 @@ A web-based validation studio and CLI companion for [agentskills.io](https://age
 
 ```bash
 # Install all dependencies (backend virtualenv + frontend npm modules)
+
 make install
 
 # Configure frontend environment (optional / defaults)
@@ -105,15 +110,17 @@ Install the latest version via the automated installer:
 curl -sSL https://raw.githubusercontent.com/neo7337/skill_inspector/main/install/install.sh | bash
 ```
 
-Or install a specific version (e.g., v1.1.0):
+Or install a specific version (e.g., v0.0.8):
 ```bash
-curl -sSL https://raw.githubusercontent.com/neo7337/skill_inspector/main/install/install.sh | bash -s -- v1.1.0
+curl -sSL https://raw.githubusercontent.com/neo7337/skill_inspector/main/install/install.sh | bash -s -- v0.0.8
 ```
 
-Alternatively, install directly from local repository:
+Alternatively, install from a local checkout:
 ```bash
-pip install -e .
+pip install -e backend
 ```
+
+The installer is a short script — review [`install/install.sh`](install/install.sh) before piping it to `bash`.
 
 ### CLI Configuration
 
@@ -177,6 +184,9 @@ skill-inspector validate path/to/SKILL.md
 # Validate with full package resolution & reference auditing
 skill-inspector validate path/to/SKILL.md --base-dir path/to/skill-package
 
+# Validate with Claude Code / plugin fields accepted
+skill-inspector validate path/to/SKILL.md --mode claude-code
+
 # Run static + LLM-as-a-Judge (uses provider & model from ~/.skill-inspector/config.json)
 skill-inspector validate path/to/SKILL.md --llm
 
@@ -210,8 +220,11 @@ FastAPI server runs at `http://localhost:8000`. Interactive OpenAPI documentatio
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/health` | Health check & service connectivity status |
+| GET | `/skill/file` | Read the full content of a referenced file inside a package (path-traversal safe) |
+| POST | `/project/scan` | Walk a project directory and return a file tree with detected skills |
+| POST | `/project/resolve` | Resolve a selected skill's references within the project |
 | POST | `/skill/package` | Inspect & resolve package directory, audit referenced files, and calculate context token economics |
-| POST | `/validate/static` | Run static structural validation and reference checks (supports optional `base_dir`) |
+| POST | `/validate/static` | Run static structural validation and reference checks (supports optional `base_dir` and `mode`) |
 | POST | `/validate/llm` | Run LLM-as-Judge behavioral evaluation with package context |
 | POST | `/repair/plan` | Generate deterministic repair plan and unified diff |
 | POST | `/repair/apply` | Apply deterministic frontmatter & schema repairs |
@@ -228,7 +241,7 @@ make test
 cd backend && PYTHONPATH=. .venv/bin/pytest tests/ -v
 ```
 
-**136 tests** covering parser, package resolution engine, static validator, repair engine, trajectory profiler, scenario generator, CLI commands, and API endpoints.
+The suite covers parser, package resolution engine, static validator, repair engine, trajectory profiler, scenario generator, CLI commands, and API endpoints.
 
 ---
 
@@ -245,12 +258,6 @@ cd backend && PYTHONPATH=. .venv/bin/pytest tests/ -v
 1. Get an API key from [console.anthropic.com](https://console.anthropic.com)
 2. In the UI: select **Anthropic**, enter your key
 3. Recommended model: `claude-3-5-haiku-20241022` or `claude-3-5-sonnet-20241022`
-
-### Google Gemini
-
-1. Get an API key from [aistudio.google.com](https://aistudio.google.com)
-2. In the UI: select **Google Gemini**, enter your key
-3. Recommended model: `gemini-1.5-flash` or `gemini-1.5-pro`
 
 ### Ollama (local, no API key)
 
@@ -308,104 +315,39 @@ Scores range from 0–100 per dimension: **Pass ≥ 75**, **Warn ≥ 50**, **Fai
 
 ```
 skill_inspector/
-├── README.md                           # Project documentation & quick start guide
-├── CHANGELOG.md                        # Version release history & changelog
-├── LICENSE                             # MIT License
-├── Makefile                            # Dev workflow targets (dev, test, install, clean)
-├── docker-compose.yml                  # Multi-container orchestration (FastAPI + Vite)
-├── pyproject.toml                      # PEP 621 Python packaging & CLI console entry points
-├── install/
-│   └── install.sh                      # Standalone curl-pipe-bash automated CLI installer
-├── tasks/
-│   ├── design-tasks.md                 # UI/UX redesign roadmap and specifications
-│   └── package-resolution-tasks.md     # Package resolution engine specifications
+├── README.md, CHANGELOG.md, LICENSE
+├── CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md
+├── Makefile                  # dev, test, install, build, clean
+├── docker-compose.yml        # FastAPI + Vite containers
+├── .github/                  # CI workflow, issue/PR templates, Dependabot
+├── install/install.sh        # curl|bash CLI installer (pipx)
+├── assets/                   # README demo media
 ├── backend/
+│   ├── README.md             # backend-specific docs
+│   ├── pyproject.toml        # package metadata; version read from app/__init__.py
+│   ├── requirements.txt
 │   ├── app/
-│   │   ├── __init__.py
-│   │   ├── cli.py                      # CLI companion suite (typer + rich formatting)
-│   │   ├── main.py                     # FastAPI server, endpoints, and CORS setup
-│   │   ├── package.py                  # Package resolution engine & multi-tier context economics
-│   │   ├── parser.py                   # YAML frontmatter parser & AST extraction
-│   │   ├── profiler/                   # Trajectory & Step-Economy Profiler
-│   │   │   ├── __init__.py
-│   │   │   ├── engine.py               # Redundancy, loop, bloat & reference access detection
-│   │   │   └── models.py               # Trace models, metric schemas & tool call types
-│   │   ├── repair/                     # Diff & Repair Auto-Fixer
-│   │   │   ├── __init__.py
-│   │   │   ├── diff_utils.py           # Unified diff generator & patch utilities
-│   │   │   ├── engine.py               # Deterministic schema & frontmatter auto-repair
-│   │   │   └── llm_repair.py           # AI-assisted instruction refactoring
-│   │   ├── scenarios/                  # Synthetic Scenario & Edge-Case Generator
-│   │   │   ├── __init__.py
-│   │   │   ├── exporter.py             # Pytest, JSON & Markdown format exporters
-│   │   │   ├── generator.py            # Scenario synthesis pipeline & prompt builder
-│   │   │   └── models.py               # Test scenario data models & difficulty tags
-│   │   └── validators/
-│   │       ├── __init__.py
-│   │       ├── static.py               # Static spec rule engine + package reference checks
-│   │       └── llm_judge.py            # Multi-provider LLM-as-a-Judge evaluation engine
-│   ├── tests/
-│   │   ├── __init__.py
-│   │   ├── test_api.py                 # FastAPI route & validation tests
-│   │   ├── test_cli.py                 # Typer CLI invocation & argument tests
-│   │   ├── test_llm_judge.py           # LLM judge provider config & evaluation tests
-│   │   ├── test_new_endpoints.py       # Package & repair endpoint integration tests
-│   │   ├── test_package.py             # Package resolution & context token tests
-│   │   ├── test_parser.py              # Frontmatter parsing & error handling tests
-│   │   ├── test_profiler.py            # Trajectory analysis & loop detection tests
-│   │   ├── test_repair.py              # Repair plan generation & patch tests
-│   │   ├── test_scenarios.py           # Scenario generation & export format tests
-│   │   └── test_static_validator.py    # Static spec & reference rule unit tests
-│   ├── pytest.ini                      # Pytest runner configuration
-│   ├── pyproject.toml                  # Backend project metadata & dependencies
-│   └── requirements.txt                # Pinned Python dependencies
-├── frontend/
-│   ├── index.html                      # Single-page application entry HTML
-│   ├── package.json                    # Frontend dependencies & build scripts
-│   ├── vite.config.ts                  # Vite configuration & dev server proxy
-│   ├── tailwind.config.js              # Tailwind CSS theme extensions & glow utilities
-│   ├── tsconfig.json                   # TypeScript compiler configuration
-│   └── src/
-│       ├── main.tsx                    # React DOM root entry point
-│       ├── App.tsx                     # Main application layout, editor & studio tabs
-│       ├── App.css                     # Global styles
-│       ├── index.css                   # Tailwind layers, custom scrollbars & theme variables
-│       ├── api.ts                      # Axios API client & backend contract definitions
-│       ├── types.ts                    # Shared TypeScript types & validation interfaces
-│       ├── examples.ts                 # Valid & broken sample skill templates
-│       ├── hooks/
-│       │   └── useTheme.ts             # Dark/light theme state & persistence hook
-│       ├── utils/
-│       │   └── applyFix.ts             # Deterministic AST fix applier for editor buffer
-│       └── components/
-│           ├── DiffViewer.tsx          # Interactive side-by-side & unified diff viewer
-│           ├── LLMReport.tsx           # Multi-dimensional LLM Judge scorecard report
-│           ├── ProviderConfigPanel.tsx # LLM provider modal & credentials config
-│           ├── ReferenceFileDrawer.tsx # Slide-over syntax-highlighted reference file drawer
-│           ├── ScenarioMatrix.tsx      # Synthetic scenario matrix & test exporter UI
-│           ├── ScoreBar.tsx            # Animated SVG score gauge & progress bars
-│           ├── SkillTokenBreakdown.tsx # Multi-tier context economics breakdown cards
-│           ├── StaticReport.tsx        # Static rules report & one-click auto-fix actions
-│           ├── StatusBadge.tsx         # Pass, Warn, and Fail status indicators
-│           ├── ThemeToggle.tsx         # Smooth-rotating dark/light theme switch
-│           └── TrajectoryReport.tsx    # Trace timeline, step waterfall & bottleneck diagnostics
-└── samples/
-    ├── sample-trace.json               # Sample agent execution trace for trajectory profiler
-    ├── broken-skill/
-    │   └── SKILL.md                    # Sample skill with intentional frontmatter & prompt flaws
-    ├── broken-package/
-    │   ├── SKILL.md                    # Package with missing file & 0-byte script references
-    │   └── scripts/
-    │       └── empty_file.py           # Zero-byte file demonstrating references.not-empty rule
-    └── valid-skill/
-        ├── SKILL.md                    # agentskills.io compliant PDF processing skill
-        ├── references/
-        │   └── guide.md                # Reference documentation demonstrating on-demand context
-        └── scripts/
-            ├── extract.py              # Sample Python extraction utility script
-            ├── fill_form.py            # Sample PDF form-filling utility script
-            └── merge.py                # Sample PDF merge utility script
+│   │   ├── main.py           # FastAPI endpoints
+│   │   ├── cli.py            # Typer CLI
+│   │   ├── config.py         # ~/.skill-inspector/config.json
+│   │   ├── parser.py         # SKILL.md frontmatter parser
+│   │   ├── package.py        # package resolution & token economics
+│   │   ├── project.py        # project scan & resolve
+│   │   ├── validators/       # static rules + LLM judge
+│   │   ├── repair/           # deterministic and LLM-assisted fixes
+│   │   ├── scenarios/        # synthetic scenario generation/export
+│   │   └── profiler/         # trajectory profiler
+│   └── tests/                # pytest suite
+├── frontend/                 # React + Vite + Tailwind studio
+│   └── src/                  # App.tsx, api.ts, components/, hooks/, utils/
+└── samples/                  # valid, broken and Claude Code example skills, sample trace
 ```
+
+---
+
+## Contributing and Security
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
 ---
 

@@ -7,18 +7,18 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import Any
 
 from app.profiler.models import (
-    TrajectoryTrace,
-    ToolCallRecord,
     RedundantCallFinding,
+    ReferenceAccessAudit,
     StepBudgetAnalysis,
     TokenEfficiencyAnalysis,
+    ToolCallRecord,
     TrajectoryProfileReport,
-    ReferenceAccessAudit,
+    TrajectoryTrace,
 )
 
 logger = logging.getLogger(__name__)
@@ -285,8 +285,7 @@ class TrajectoryProfiler:
             if any(w in tname for w in file_write_tools):
                 # File was modified; clear past read caches for this path
                 path = str(call.tool_arguments.get("TargetFile") or call.tool_arguments.get("path") or "")
-                if path in file_reads:
-                    del file_reads[path]
+                file_reads.pop(path, None)
             elif any(r in tname for r in file_read_tools):
                 path = str(call.tool_arguments.get("AbsolutePath") or call.tool_arguments.get("path") or "")
                 if path:

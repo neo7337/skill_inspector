@@ -4,6 +4,7 @@ Diff utilities for generating unified diffs and structured line patches.
 from __future__ import annotations
 
 import difflib
+
 from pydantic import BaseModel
 
 
