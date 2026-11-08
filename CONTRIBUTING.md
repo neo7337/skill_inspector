@@ -28,4 +28,3 @@ By contributing you agree your work is licensed under the MIT License.
 1. Bump `__version__` in `backend/app/__init__.py` (the single source of truth).
 2. Add a CHANGELOG entry.
 3. Tag the release: `git tag vX.Y.Z && git push --tags`.
-4. Keep `backend/README.md` in sync with the root `README.md` (`cp README.md backend/README.md`); it is the package long description.
