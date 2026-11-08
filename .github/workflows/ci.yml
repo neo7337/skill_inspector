@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -89,7 +89,7 @@ jobs:
     needs: [step1-backend-static-checks, step1-frontend-static-checks]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -126,7 +126,7 @@ jobs:
     needs: [step2-tests]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -151,7 +151,7 @@ jobs:
     needs: [step2-tests]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -184,7 +184,7 @@ jobs:
   #   needs: [step3-build-backend]
   #   steps:
   #     - name: Checkout repository
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v7
 
   #     - name: Set up Docker Buildx
   #       uses: docker/setup-buildx-action@v3
@@ -205,7 +205,7 @@ jobs:
   #   needs: [step3-build-frontend]
   #   steps:
   #     - name: Checkout repository
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v7
 
   #     - name: Set up Docker Buildx
   #       uses: docker/setup-buildx-action@v3
@@ -231,7 +231,7 @@ jobs:
   #   if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || inputs.publish_backend == true
   #   steps:
   #     - name: Checkout repository
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v7
 
   #     - name: Set up Docker Buildx
   #       uses: docker/setup-buildx-action@v3
@@ -270,7 +270,7 @@ jobs:
   #   if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || inputs.publish_frontend == true
   #   steps:
   #     - name: Checkout repository
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v7
 
   #     - name: Set up Docker Buildx
   #       uses: docker/setup-buildx-action@v3
