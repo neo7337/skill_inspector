@@ -4,12 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "skill-inspector"
-version = "0.0.7"
+dynamic = ["version"]
 description = "Static validator, LLM judge and trajectory profiler for agent skills (SKILL.md)"
+readme = "README.md"
 license = {text = "MIT"}
 authors = [{name = "Aditya Kumar"}]
 keywords = ["agent-skills", "claude", "llm", "linter", "validation"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -39,3 +40,6 @@ include = ["app*"]
 [project.urls]
 Homepage = "https://github.com/neo7337/skill_inspector"
 Issues = "https://github.com/neo7337/skill_inspector/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "app.__version__"}

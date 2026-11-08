@@ -136,13 +136,13 @@ jobs:
       - name: Build Python distribution package
         run: |
           python -m pip install --upgrade pip build
-          python -m build
+          python -m build backend
 
       - name: Upload backend dist artifact
         uses: actions/upload-artifact@v4
         with:
           name: backend-package-dist
-          path: dist/
+          path: backend/dist/
           retention-days: 7
 
   step3-build-frontend:

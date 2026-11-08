@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from app import __version__
 from app.package import resolve_skill_package
 from app.parser import ParseError, parse_skill_md
 from app.profiler import TrajectoryProfiler
@@ -29,7 +30,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="AI Skill Validator & Profiler",
     description="Validates, auto-fixes, profiles trajectories, and generates synthetic tests for agentskills.io SKILL.md files.",
-    version="1.1.0",
+    version=__version__,
 )
 
 app.add_middleware(
